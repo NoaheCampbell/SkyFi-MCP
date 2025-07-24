@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SkyFi MCP Demo Agent</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+        .config-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #555;
+        }
+        input, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        button {
+            background: #0066cc;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background: #0052a3;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        .tools-list {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            margin: 20px 0;
+        }
+        .tool-item {
+            padding: 10px;
+            margin: 5px 0;
+            background: #f8f9fa;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .tool-item:hover {
+            background: #e9ecef;
+        }
+        .tool-name {
+            font-weight: 600;
+            color: #0066cc;
+        }
+        .tool-description {
+            font-size: 14px;
+            color: #666;
+            margin-top: 5px;
+        }
+        .execution-section {
+            margin-top: 30px;
+            padding-top: 30px;
+            border-top: 1px solid #ddd;
+        }
+        .output {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .demo-buttons {
+            margin: 20px 0;
+        }
+        .demo-button {
+            background: #28a745;
+            margin: 5px;
+        }
+        .demo-button:hover {
+            background: #218838;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🛰️ SkyFi MCP Demo Agent</h1>
+        <p class="subtitle">Web-based demo showing dynamic API key authentication via headers</p>
+        
+        <div class="config-section">
+            <h2>Configuration</h2>
+            <div class="form-group">
+                <label for="serverUrl">MCP Server URL:</label>
+                <input type="text" id="serverUrl" value="http://localhost:8000" placeholder="http://localhost:8000">
+            </div>
+            <div class="form-group">
+                <label for="apiKey">SkyFi API Key (optional):</label>
+                <input type="password" id="apiKey" placeholder="your-api-key-here">
+                <small style="color: #666;">Leave empty to only access weather/OSM tools</small>
+            </div>
+            <button onclick="testConnection()">Test Connection</button>
+            <button onclick="connectMCP()" id="connectBtn">Connect to MCP</button>
+            <button onclick="disconnect()" id="disconnectBtn" disabled>Disconnect</button>
+        </div>
+        
+        <div id="status"></div>
+        
+        <div id="toolsSection" style="display: none;">
+            <h2>Available Tools</h2>
+            <div id="toolsList" class="tools-list"></div>
+        </div>
+        
+        <div class="demo-buttons">
+            <h3>Quick Demos</h3>
+            <button class="demo-button" onclick="demoWeather()">🌤️ Weather Demo (No API Key)</button>
+            <button class="demo-button" onclick="demoOSM()">🗺️ OSM Demo (No API Key)</button>
+            <button class="demo-button" onclick="demoSkyFi()">🛰️ SkyFi Demo (Requires API Key)</button>
+        </div>
+        
+        <div class="execution-section">
+            <h2>Tool Execution</h2>
+            <div class="form-group">
+                <label for="toolName">Tool Name:</label>
+                <input type="text" id="toolName" placeholder="e.g., weather_get_current">
+            </div>
+            <div class="form-group">
+                <label for="toolArgs">Arguments (JSON):</label>
+                <textarea id="toolArgs" rows="4" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">{"location": "Tokyo, Japan"}</textarea>
+            </div>
+            <button onclick="executeTool()">Execute Tool</button>
+            
+            <h3>Output</h3>
+            <div id="output" class="output">Ready to connect...</div>
+        </div>
+    </div>
+
+    <script>
+        let eventSource = null;
+        let tools = {};
+        let messageId = 1;
+        
+        function showStatus(message, type = 'info') {
+            const status = document.getElementById('status');
+            status.className = `status ${type}`;
+            status.textContent = message;
+        }
+        
+        function log(message) {
+            const output = document.getElementById('output');
+            output.textContent += message + '\n';
+            output.scrollTop = output.scrollHeight;
+        }
+        
+        async function testConnection() {
+            const serverUrl = document.getElementById('serverUrl').value;
+            log(`\n🧪 Testing connection to ${serverUrl}...`);
+            
+            try {
+                // Test root endpoint
+                const response = await fetch(serverUrl);
+                const data = await response.json();
+                log(`✅ Server: ${data.name} v${data.version}`);
+                log(`   Transport: ${data.transport}`);
+                
+                // Test health
+                const healthResponse = await fetch(`${serverUrl}/health`);
+                const health = await healthResponse.json();
+                log(`✅ Health: ${health.status}`);
+                
+                showStatus('Connection test successful!', 'connected');
+            } catch (error) {
+                log(`❌ Connection failed: ${error.message}`);
+                showStatus('Connection failed!', 'error');
+            }
+        }
+        
+        function connectMCP() {
+            const serverUrl = document.getElementById('serverUrl').value;
+            const apiKey = document.getElementById('apiKey').value;
+            
+            log(`\n🔌 Connecting to MCP server...`);
+            
+            // Close existing connection
+            if (eventSource) {
+                eventSource.close();
+            }
+            
+            // Create headers
+            const headers = {};
+            if (apiKey) {
+                headers['Authorization'] = `Bearer ${apiKey}`;
+                log('🔑 Using API key authentication');
+            } else {
+                log('⚠️  No API key - only public tools available');
+            }
+            
+            // Note: EventSource doesn't support custom headers in browsers
+            // In production, you'd use a WebSocket or a proxy
+            log('\n⚠️  Note: Browser EventSource API doesn\'t support custom headers.');
+            log('In production, use WebSocket or a proxy server.');
+            log('For this demo, showing what would be sent:\n');
+            log(`Headers: ${JSON.stringify(headers, null, 2)}`);
+            
+            // Simulate connection
+            showStatus('Connected (Demo Mode)', 'connected');
+            document.getElementById('connectBtn').disabled = true;
+            document.getElementById('disconnectBtn').disabled = false;
+            
+            // Simulate tool discovery
+            simulateToolDiscovery(!!apiKey);
+        }
+        
+        function disconnect() {
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+            }
+            
+            log('\n👋 Disconnected');
+            showStatus('Disconnected', 'info');
+            document.getElementById('connectBtn').disabled = false;
+            document.getElementById('disconnectBtn').disabled = true;
+            document.getElementById('toolsSection').style.display = 'none';
+        }
+        
+        function simulateToolDiscovery(hasApiKey) {
+            // Simulate available tools
+            tools = {
+                'weather_get_current': {
+                    name: 'weather_get_current',
+                    description: 'Get current weather for a location'
+                },
+                'weather_get_forecast': {
+                    name: 'weather_get_forecast', 
+                    description: 'Get weather forecast for a location'
+                },
+                'osm_search_nearby': {
+                    name: 'osm_search_nearby',
+                    description: 'Search for nearby points of interest'
+                }
+            };
+            
+            if (hasApiKey) {
+                tools['skyfi_search_imagery'] = {
+                    name: 'skyfi_search_imagery',
+                    description: 'Search for satellite imagery of a location'
+                };
+                tools['skyfi_get_pricing'] = {
+                    name: 'skyfi_get_pricing',
+                    description: 'Get pricing for satellite tasking'
+                };
+            }
+            
+            displayTools();
+        }
+        
+        function displayTools() {
+            const toolsList = document.getElementById('toolsList');
+            toolsList.innerHTML = '';
+            
+            for (const [name, tool] of Object.entries(tools)) {
+                const div = document.createElement('div');
+                div.className = 'tool-item';
+                div.onclick = () => selectTool(name);
+                div.innerHTML = `
+                    <div class="tool-name">${name}</div>
+                    <div class="tool-description">${tool.description}</div>
+                `;
+                toolsList.appendChild(div);
+            }
+            
+            document.getElementById('toolsSection').style.display = 'block';
+            log(`\n📦 Discovered ${Object.keys(tools).length} tools`);
+        }
+        
+        function selectTool(toolName) {
+            document.getElementById('toolName').value = toolName;
+            
+            // Set example arguments based on tool
+            const examples = {
+                'weather_get_current': '{"location": "Tokyo, Japan"}',
+                'weather_get_forecast': '{"location": "Paris, France", "days": 3}',
+                'osm_search_nearby': '{"lat": 35.6762, "lon": 139.6503, "radius": 1000, "tags": ["tourism"]}',
+                'skyfi_search_imagery': '{"location": "Mount Fuji, Japan", "start_date": "2024-01-01", "end_date": "2024-12-31"}',
+                'skyfi_get_pricing': '{"geometry": {"type": "Point", "coordinates": [139.7454, 35.6586]}, "imaging_mode": "spotlight"}'
+            };
+            
+            document.getElementById('toolArgs').value = examples[toolName] || '{}';
+        }
+        
+        function executeTool() {
+            const toolName = document.getElementById('toolName').value;
+            const toolArgs = document.getElementById('toolArgs').value;
+            
+            try {
+                const args = JSON.parse(toolArgs);
+                log(`\n🔧 Executing: ${toolName}`);
+                log(`Arguments: ${JSON.stringify(args, null, 2)}`);
+                
+                // Simulate tool execution
+                if (toolName.startsWith('weather_')) {
+                    log('\n✅ Response:');
+                    log('Weather: Sunny, 22°C');
+                    log('Humidity: 45%');
+                    log('Wind: 10 km/h NW');
+                } else if (toolName.startsWith('osm_')) {
+                    log('\n✅ Response:');
+                    log('Found 3 tourist attractions nearby:');
+                    log('- Tokyo Tower (500m)');
+                    log('- Sensoji Temple (2.3km)');
+                    log('- Imperial Palace (3.1km)');
+                } else if (toolName.startsWith('skyfi_')) {
+                    if (!document.getElementById('apiKey').value) {
+                        log('\n❌ Error: SkyFi tools require API key');
+                    } else {
+                        log('\n✅ Response:');
+                        log('Found 5 satellite passes available');
+                        log('Next pass: Tomorrow 14:30 UTC');
+                        log('Resolution: 30cm');
+                        log('Price: $450');
+                    }
+                } else {
+                    log('\n❌ Unknown tool');
+                }
+            } catch (error) {
+                log(`\n❌ Error: ${error.message}`);
+            }
+        }
+        
+        // Demo functions
+        function demoWeather() {
+            document.getElementById('toolName').value = 'weather_get_current';
+            document.getElementById('toolArgs').value = '{"location": "New York, USA"}';
+            executeTool();
+        }
+        
+        function demoOSM() {
+            document.getElementById('toolName').value = 'osm_search_nearby';
+            document.getElementById('toolArgs').value = '{"lat": 40.7128, "lon": -74.0060, "radius": 500, "tags": ["restaurant"]}';
+            executeTool();
+        }
+        
+        function demoSkyFi() {
+            document.getElementById('toolName').value = 'skyfi_search_imagery';
+            document.getElementById('toolArgs').value = '{"location": "Golden Gate Bridge, San Francisco", "start_date": "2024-01-01", "end_date": "2024-12-31"}';
+            executeTool();
+        }
+    </script>
+</body>
+</html>
