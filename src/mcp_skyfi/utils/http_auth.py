@@ -22,12 +22,14 @@ async def verify_api_key(
     if user_data:
         return json.loads(user_data)
     
-    # For demo purposes, accept the SkyFi API key format
-    if api_key.startswith("lucas@skyfi.com:"):
+    # For demo purposes, accept any API key in the format "email:key"
+    if ":" in api_key and "@" in api_key.split(":")[0]:
+        email = api_key.split(":")[0]
+        user_id = email.split("@")[0]
         # Create a user record
         user = {
-            "id": "lucas",
-            "email": "lucas@skyfi.com",
+            "id": user_id,
+            "email": email,
             "api_key_hash": key_hash,
             "limits": {
                 "total": 40.0,
