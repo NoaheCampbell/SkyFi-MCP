@@ -8,6 +8,9 @@ from dotenv import load_dotenv
 
 from .servers.main import SkyFiMCPServer
 
+# Make remote_wrapper importable
+from . import remote_wrapper
+
 
 @click.command()
 @click.option("--host", default="127.0.0.1", help="HTTP server host")
