@@ -1,0 +1,58 @@
+#!/bin/bash
+# Quick setup script for Amazon Linux
+
+set -e
+
+echo "=== MCP SkyFi Quick Setup for Amazon Linux ==="
+
+# Update system
+sudo yum update -y
+sudo yum install -y python3 python3-pip socat git
+
+# Clone repository
+git clone https://github.com/NoaheCampbell/SkyFi-MCP.git
+
+cd SkyFi-MCP
+
+# Install Python package
+pip3 install -e .
+
+# Create startup script
+cat > start-mcp.sh << 'EOF'
+#!/bin/bash
+cd $(dirname $0)
+echo "Starting MCP server on port 5456..."
+echo "To stop: Ctrl+C"
+socat TCP-LISTEN:5456,fork,reuseaddr EXEC:"python3 -m mcp_skyfi"
+EOF
+chmod +x start-mcp.sh
+
+# Create systemd service for auto-start
+sudo tee /etc/systemd/system/mcp-skyfi.service > /dev/null << EOF
+[Unit]
+Description=MCP SkyFi Server
+After=network.target
+
+[Service]
+Type=simple
+User=ec2-user
+WorkingDirectory=/home/ec2-user/SkyFi-MCP
+ExecStart=/usr/bin/socat TCP-LISTEN:5456,fork,reuseaddr EXEC:"python3 -m mcp_skyfi"
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl enable mcp-skyfi
+sudo systemctl start mcp-skyfi
+
+echo
+echo "=== Setup Complete! ==="
+echo
+echo "MCP server is now running on port 5456"
+echo "Check status: sudo systemctl status mcp-skyfi"
+echo "View logs: sudo journalctl -u mcp-skyfi -f"
+echo
+echo "To connect from Claude Desktop, use:"
+echo "  nc YOUR_AWS_IP 5456"
