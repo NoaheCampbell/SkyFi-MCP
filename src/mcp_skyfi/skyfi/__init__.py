@@ -1,0 +1,1 @@
+"""SkyFi satellite imagery service module."""
