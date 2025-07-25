@@ -2,6 +2,7 @@
 import logging
 from typing import Any, Dict, Optional
 
+import json
 import httpx
 
 from .config import SkyFiConfig
@@ -129,8 +130,20 @@ class SkyFiClient:
             "deliveryParams": delivery_params,
         }
         
+        logger.info(f"Sending order request with payload: {json.dumps(payload, indent=2)}")
+        
         # Make the API call
         response = await self.client.post("/order-archive", json=payload)
+        
+        # Log response details for debugging
+        if response.status_code == 422:
+            logger.error(f"422 Error - Request payload: {json.dumps(payload, indent=2)}")
+            try:
+                error_detail = response.json()
+                logger.error(f"422 Error details: {json.dumps(error_detail, indent=2)}")
+            except:
+                logger.error(f"422 Error response text: {response.text}")
+        
         response.raise_for_status()
         result = response.json()
         
@@ -156,3 +169,88 @@ class SkyFiClient:
         response = await self.client.post("/pricing", json=payload)
         response.raise_for_status()
         return response.json()
+    
+    async def list_orders(
+        self, 
+        order_type: Optional[str] = None,
+        page_size: int = 10,
+        page_number: int = 0
+    ) -> Dict[str, Any]:
+        """List orders for the user.
+        
+        Args:
+            order_type: Filter by ARCHIVE or TASKING
+            page_size: Number of results per page
+            page_number: Page number (0-indexed)
+            
+        Returns:
+            Order list with metadata
+        """
+        params = {
+            "pageSize": page_size,
+            "pageNumber": page_number
+        }
+        
+        if order_type:
+            params["orderType"] = order_type
+            
+        response = await self.client.get("/orders", params=params)
+        response.raise_for_status()
+        return response.json()
+    
+    async def download_order(self, order_id: str, deliverable_type: str = "image", save_path: Optional[str] = None) -> str:
+        """Download order file to local disk.
+        
+        Args:
+            order_id: The order ID
+            deliverable_type: Type of deliverable (image, payload, tiles)
+            save_path: Where to save the file (defaults to order_ID_type with appropriate extension)
+            
+        Returns:
+            Path to the saved file
+        """
+        import os
+        import tempfile
+        
+        # Determine file extension based on deliverable type
+        extensions = {
+            "image": "png",  # Could also be jpg, but png is common
+            "payload": "zip",
+            "tiles": "zip"
+        }
+        
+        if not save_path:
+            ext = extensions.get(deliverable_type, "dat")
+            # Use temp directory to avoid read-only file system issues
+            temp_dir = tempfile.gettempdir()
+            save_path = os.path.join(temp_dir, f"skyfi_order_{order_id}_{deliverable_type}.{ext}")
+        
+        # Download directly from the endpoint
+        endpoint = f"/orders/{order_id}/{deliverable_type}"
+        
+        # Download with API key in header using -L style redirect following
+        response = await self.client.get(
+            endpoint,
+            headers={"X-Skyfi-Api-Key": self.config.api_key},
+            follow_redirects=True
+        )
+        response.raise_for_status()
+        
+        # Save to file
+        with open(save_path, 'wb') as f:
+            f.write(response.content)
+        
+        return os.path.abspath(save_path)
+    
+    async def get_download_url(self, order_id: str, deliverable_type: str = "image") -> str:
+        """Get download URL for a completed order.
+        
+        Args:
+            order_id: The order ID
+            deliverable_type: Type of deliverable (image, payload, tiles)
+            
+        Returns:
+            The API endpoint URL (requires authentication header to download)
+        """
+        # Return the direct API endpoint - authentication required via header
+        return f"{self.config.api_url}/orders/{order_id}/{deliverable_type}"

@@ -157,6 +157,78 @@ async def register_skyfi_tools() -> List[Tool]:
                 "required": ["token", "confirmation_code"]
             }
         ),
+        Tool(
+            name="skyfi_list_orders",
+            description="Get list of all satellite image orders with their current status (processing, complete, failed). Shows order IDs, status, and download instructions for completed orders. Use this to check order status or get download links.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "order_type": {
+                        "type": "string",
+                        "enum": ["ARCHIVE", "TASKING"],
+                        "description": "Filter by order type (optional)"
+                    },
+                    "page_size": {
+                        "type": "integer",
+                        "default": 10,
+                        "minimum": 1,
+                        "maximum": 100,
+                        "description": "Number of orders per page"
+                    },
+                    "page_number": {
+                        "type": "integer",
+                        "default": 0,
+                        "minimum": 0,
+                        "description": "Page number (0-indexed)"
+                    }
+                },
+                "required": []
+            }
+        ),
+        Tool(
+            name="skyfi_get_download_url",
+            description="Download a completed order file. Automatically downloads to temp directory and returns the file path.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "order_id": {
+                        "type": "string",
+                        "description": "Order ID from the confirmed order or order list"
+                    },
+                    "deliverable_type": {
+                        "type": "string",
+                        "enum": ["image", "payload", "tiles"],
+                        "default": "image",
+                        "description": "Type of deliverable to download (image=visual imagery, payload=full package, tiles=tile service)"
+                    }
+                },
+                "required": ["order_id"]
+            }
+        ),
+        Tool(
+            name="skyfi_download_order",
+            description="Download a completed order file to local disk. Automatically handles authentication.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "order_id": {
+                        "type": "string",
+                        "description": "Order ID from the confirmed order or order list"
+                    },
+                    "deliverable_type": {
+                        "type": "string",
+                        "enum": ["image", "payload", "tiles"],
+                        "default": "image",
+                        "description": "Type of deliverable to download (image=visual imagery, payload=full package, tiles=tile service)"
+                    },
+                    "save_path": {
+                        "type": "string",
+                        "description": "Path where to save the file (optional, defaults to order_ID_type.zip)"
+                    }
+                },
+                "required": ["order_id"]
+            }
+        ),
     ]
     
     # Add budget tools

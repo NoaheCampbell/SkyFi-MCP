@@ -249,12 +249,33 @@ async def handle_skyfi_tool(name: str, arguments: Dict[str, Any]) -> List[TextCo
                 archive_id = arguments["archiveId"]
                 estimated_cost = float(arguments["estimated_cost"])
                 
+                # Calculate area and auto-expand if too small
+                from ..utils.area_calculator import calculate_wkt_area_km2, expand_polygon_to_minimum_area
+                original_area_km2 = calculate_wkt_area_km2(aoi)
+                
+                # Auto-expand if area is too small
+                if original_area_km2 < 5.0:
+                    logger.info(f"Auto-expanding area from {original_area_km2:.2f} km² to 5.1 km²")
+                    # Use 5.1 km² to ensure we're safely above the 5.0 minimum
+                    aoi = expand_polygon_to_minimum_area(aoi, min_area_km2=5.1)
+                    area_km2 = calculate_wkt_area_km2(aoi)
+                else:
+                    area_km2 = original_area_km2
+                
                 # Create order manager
                 order_manager = OrderManager()
                 
                 # Perform all safety checks
                 checks_passed = True
                 warnings = []
+                
+                # Check 0: Area size maximum (we auto-expand small areas)
+                if area_km2 > 10000.0:
+                    checks_passed = False
+                    warnings.append(
+                        f"❌ Area too large: {area_km2:.2f} km² (maximum: 10,000 km²)\n"
+                        f"   Please select a smaller area or split into multiple orders."
+                    )
                 
                 # Check 1: Single order cost limit
                 if estimated_cost > client.config.max_order_cost:
@@ -292,11 +313,12 @@ async def handle_skyfi_tool(name: str, arguments: Dict[str, Any]) -> List[TextCo
                     )]
                 
                 # Create pending order
+                # Use NONE delivery driver for SkyFi-hosted downloads
                 order_details = {
                     "aoi": aoi,
                     "archiveId": archive_id,
-                    "deliveryDriver": "S3",  # Default, could be parameterized
-                    "deliveryParams": {}  # Would need to be filled in
+                    "deliveryDriver": "NONE",  # NONE = use SkyFi download URLs
+                    "deliveryParams": None  # Must be null for NONE delivery driver
                 }
                 
                 token = order_manager.create_pending_order(
@@ -310,7 +332,19 @@ async def handle_skyfi_tool(name: str, arguments: Dict[str, Any]) -> List[TextCo
                 response = f"📋 Order Preview\n"
                 response += f"{'=' * 40}\n\n"
                 response += f"Archive ID: {archive_id}\n"
+                
+                # Show area information
+                if original_area_km2 < 5.0:
+                    response += f"Area: {area_km2:.2f} km² (auto-expanded from {original_area_km2:.2f} km²)\n"
+                    response += f"⚠️ Your area was automatically expanded to meet the 5 km² minimum\n"
+                else:
+                    response += f"Area: {area_km2:.2f} km²"
+                
+                if area_km2 < 25.0:
+                    response += f" (minimum billing: 25 km²)"
+                response += f"\n"
                 response += f"Estimated Cost: ${estimated_cost:.2f}\n"
+                response += f"Delivery: Download URL (no cloud storage needed)\n"
                 response += f"Budget Status:\n"
                 response += f"  - Current spending: ${total_spent:.2f}\n"
                 response += f"  - After this order: ${total_spent + estimated_cost:.2f}\n"
@@ -363,6 +397,9 @@ async def handle_skyfi_tool(name: str, arguments: Dict[str, Any]) -> List[TextCo
                 
                 # If confirmed, proceed with the actual order
                 try:
+                    # Log the order details for debugging
+                    logger.info(f"Order details from storage: {json.dumps(order['details'], indent=2)}")
+                    
                     result = await client.order_archive(
                         aoi=order["details"]["aoi"],
                         archive_id=order["details"]["archiveId"],
@@ -417,6 +454,163 @@ async def handle_skyfi_tool(name: str, arguments: Dict[str, Any]) -> List[TextCo
                         report += f"- {order['timestamp']}: ${order['cost']:.2f} ({order['archive_id']})\n"
                 
                 return [TextContent(type="text", text=report)]
+            
+            elif name == "skyfi_list_orders":
+                order_type = arguments.get("order_type")
+                page_size = arguments.get("page_size", 10)
+                page_number = arguments.get("page_number", 0)
+                
+                try:
+                    result = await client.list_orders(
+                        order_type=order_type,
+                        page_size=page_size,
+                        page_number=page_number
+                    )
+                    
+                    # Format the response
+                    text = f"📋 Order History (Page {page_number + 1})\n"
+                    text += f"{'=' * 50}\n\n"
+                    text += f"Total orders: {result.get('total', 0)}\n\n"
+                    
+                    orders = result.get('orders', [])
+                    if not orders:
+                        text += "No orders found.\n"
+                    else:
+                        for idx, order in enumerate(orders, 1):
+                            order_id = order.get('id', 'N/A')
+                            order_type = order.get('orderType', 'N/A')
+                            status = order.get('status', 'N/A')
+                            cost = order.get('orderCost', 0)
+                            created = order.get('createdAt', 'N/A')
+                            order_code = order.get('orderCode', 'N/A')
+                            location = order.get('geocodeLocation', 'N/A')
+                            
+                            # Status emoji
+                            status_emoji = {
+                                'PROCESSING_COMPLETE': '✅',
+                                'PROCESSING_PENDING': '🔄',
+                                'PROVIDER_PENDING': '⏳',
+                                'CREATED': '🆕',
+                                'FAILED': '❌'
+                            }.get(status, '🔵')
+                            
+                            text += f"{idx}. {status_emoji} Order {order_code} ({order_type})\n"
+                            text += f"   ID: {order_id}\n"
+                            text += f"   Status: {status}\n"
+                            text += f"   Cost: ${cost / 100:.2f}\n" if cost > 0 else "   Cost: FREE\n"
+                            text += f"   Location: {location}\n"
+                            text += f"   Created: {created}\n"
+                            
+                            # Add download URLs if complete
+                            if status == 'PROCESSING_COMPLETE':
+                                text += f"   📥 Download Image: Use skyfi_get_download_url with order_id='{order_id}'\n"
+                            
+                            # Add archive details if available
+                            if order_type == 'ARCHIVE' and 'archive' in order:
+                                archive = order['archive']
+                                constellation = archive.get('constellation', 'N/A')
+                                capture_date = archive.get('captureTimestamp', 'N/A')
+                                cloud_cover = archive.get('cloudCoveragePercent', 'N/A')
+                                text += f"   Satellite: {constellation}\n"
+                                text += f"   Captured: {capture_date}\n"
+                                text += f"   Cloud Cover: {cloud_cover:.1f}%\n"
+                            
+                            text += "\n"
+                    
+                    # Add pagination info
+                    if result.get('total', 0) > page_size:
+                        total_pages = (result['total'] + page_size - 1) // page_size
+                        text += f"\n📖 Page {page_number + 1} of {total_pages}\n"
+                        if page_number < total_pages - 1:
+                            text += f"Use page_number={page_number + 1} to see more orders.\n"
+                    
+                    # Add download instructions if any orders are complete
+                    has_complete_orders = any(o.get('status') == 'PROCESSING_COMPLETE' for o in orders)
+                    if has_complete_orders:
+                        text += "\n💡 To download completed orders, use skyfi_get_download_url with the order ID.\n"
+                        text += "Files will be automatically downloaded to your temp directory.\n"
+                    
+                    return [TextContent(type="text", text=text)]
+                    
+                except Exception as e:
+                    logger.error(f"Error listing orders: {e}")
+                    return [TextContent(
+                        type="text",
+                        text=f"❌ Error listing orders: {str(e)}"
+                    )]
+            
+            elif name == "skyfi_get_download_url":
+                order_id = arguments["order_id"]
+                deliverable_type = arguments.get("deliverable_type", "image")
+                
+                try:
+                    download_url = await client.get_download_url(order_id, deliverable_type)
+                    
+                    # Try to download directly instead of showing curl command
+                    try:
+                        file_path = await client.download_order(order_id, deliverable_type)
+                        
+                        return [TextContent(
+                            type="text",
+                            text=(
+                                f"✅ Successfully downloaded order {order_id}\n\n"
+                                f"📁 Saved to: {file_path}\n"
+                                f"Type: {deliverable_type}\n\n"
+                                "The file has been saved to your temp directory and is ready to use."
+                            )
+                        )]
+                    except Exception as download_error:
+                        # If download fails, provide the URL and instructions
+                        extensions = {
+                            "image": "png",
+                            "payload": "zip",
+                            "tiles": "zip"
+                        }
+                        ext = extensions.get(deliverable_type, "dat")
+                        
+                        return [TextContent(
+                            type="text",
+                            text=(
+                                f"📥 Order {order_id} - Download Information\n\n"
+                                f"Type: {deliverable_type}\n"
+                                f"Expected format: .{ext}\n\n"
+                                f"⚠️ Could not download automatically: {str(download_error)}\n\n"
+                                "To download manually, use this curl command:\n\n"
+                                f"```bash\n"
+                                f"curl -L -X GET \"{download_url}\" \\\n"
+                                f"  -H \"X-Skyfi-Api-Key: {client.config.api_key}\" \\\n"
+                                f"  --output skyfi-order-{order_id}.{ext}\n"
+                                f"```"
+                            )
+                        )]
+                except Exception as e:
+                    return [TextContent(
+                        type="text",
+                        text=f"❌ Failed to get download URL: {str(e)}\n\nThe order may still be processing."
+                    )]
+            
+            elif name == "skyfi_download_order":
+                order_id = arguments["order_id"]
+                deliverable_type = arguments.get("deliverable_type", "image")
+                save_path = arguments.get("save_path")
+                
+                try:
+                    file_path = await client.download_order(order_id, deliverable_type, save_path)
+                    
+                    return [TextContent(
+                        type="text",
+                        text=(
+                            f"✅ Successfully downloaded order {order_id}\n\n"
+                            f"📁 Saved to: {file_path}\n"
+                            f"Type: {deliverable_type}\n\n"
+                            "The file has been saved to your local disk."
+                        )
+                    )]
+                except Exception as e:
+                    return [TextContent(
+                        type="text",
+                        text=f"❌ Failed to download order: {str(e)}\n\nThe order may still be processing or there may be an authentication issue."
+                    )]
             
             else:
                 raise ValueError(f"Unknown SkyFi tool: {name}")

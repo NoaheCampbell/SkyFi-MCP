@@ -1,0 +1,13 @@
+{
+    "mcpServers": {
+        "skyfi": {
+            "command": "/path/to/mcp-skyfi",
+            "env": {
+                "SKYFI_API_KEY": "YOUR_SKYFI_API_KEY_HERE",
+                "SKYFI_COST_LIMIT": "40.0",
+                "SKYFI_FORCE_LOWEST_COST": "true",
+                "SKYFI_ENABLE_ORDERING": "false"
+            }
+        }
+    }
+}
