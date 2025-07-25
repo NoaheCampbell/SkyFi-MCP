@@ -164,4 +164,9 @@ async def register_skyfi_tools() -> List[Tool]:
     budget_tools = await register_budget_tools()
     tools.extend(budget_tools)
     
+    # Add account tools
+    from .account_tools import register_account_tools
+    account_tools = await register_account_tools()
+    tools.extend(account_tools)
+    
     return tools

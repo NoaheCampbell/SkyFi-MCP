@@ -390,6 +390,11 @@ async def handle_skyfi_tool(name: str, arguments: Dict[str, Any]) -> List[TextCo
                 from .budget_tools import call_budget_tool
                 return await call_budget_tool(name, arguments)
             
+            elif name == "skyfi_update_account_budget":
+                # Handle account tools
+                from .account_tools import call_account_tool
+                return await call_account_tool(name, arguments)
+            
             elif name == "skyfi_spending_report":
                 total_spent = client.cost_tracker.get_total_spent()
                 remaining = client.cost_tracker.get_remaining_budget(client.config.cost_limit)
