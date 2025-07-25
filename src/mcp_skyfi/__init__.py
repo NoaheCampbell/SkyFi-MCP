@@ -26,9 +26,8 @@ def main(host: str, port: int, transport: str) -> None:
     else:
         # Use HTTP server
         import uvicorn
-        from .servers.http_server import create_http_server
+        from .servers.http_server_simple import app
         
-        app = create_http_server()
         uvicorn.run(app, host=host, port=port)
 
 

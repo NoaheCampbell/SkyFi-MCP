@@ -174,7 +174,7 @@ async def demo_enterprise_usage():
         {"name": "Charlie", "api_key": None},  # No API key - limited access
     ]
     
-    server_url = "https://skyfi-mcp.ngrok.io"  # Your production server
+    server_url = "http://localhost:8001"  # Change to your production server
     
     for user in users:
         print(f"\n{'='*40}")
@@ -219,7 +219,7 @@ async def demo_web_app_usage():
     session = WebSession()
     
     print("\n1. User visits website (no API key)")
-    async with MCPClient("http://localhost:8000") as client:
+    async with MCPClient("http://localhost:8001") as client:
         agent = SkyFiMCPAgent(client)
         print("   Available: Weather, OSM tools")
         await agent.get_weather("London, UK")
@@ -228,7 +228,7 @@ async def demo_web_app_usage():
     session.api_key = "user-provided-api-key"
     
     print("\n3. Now user has full access")
-    async with MCPClient("http://localhost:8000", api_key=session.api_key) as client:
+    async with MCPClient("http://localhost:8001", api_key=session.api_key) as client:
         agent = SkyFiMCPAgent(client)
         print("   Available: All tools including SkyFi")
         await agent.search_satellite_imagery("Big Ben, London")

@@ -85,3 +85,9 @@ class SkyFiMCPServer:
         # Note: HTTP transport would require additional implementation
         # This is a placeholder for future enhancement
         raise NotImplementedError("HTTP transport not yet implemented")
+
+
+async def run_server() -> None:
+    """Run the MCP server in STDIO mode."""
+    server = SkyFiMCPServer()
+    await server.run_stdio()

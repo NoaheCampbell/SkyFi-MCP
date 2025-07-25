@@ -188,23 +188,7 @@ class InteractiveMCPClient:
         print("4. Display formatted weather to user")
 
 
-@click.command()
-@click.option(
-    "--server-url",
-    default="http://localhost:8000",
-    help="MCP server URL"
-)
-@click.option(
-    "--api-key",
-    envvar="SKYFI_API_KEY",
-    help="SkyFi API key (or set SKYFI_API_KEY env var)"
-)
-@click.option(
-    "--demo",
-    is_flag=True,
-    help="Run interactive demo"
-)
-async def main(server_url: str, api_key: Optional[str], demo: bool):
+async def async_main(server_url: str, api_key: Optional[str], demo: bool):
     """Demo MCP Agent - Shows how to connect to MCP servers with proper authentication."""
     
     print("🤖 MCP Demo Agent")
@@ -240,5 +224,25 @@ async def main(server_url: str, api_key: Optional[str], demo: bool):
             print("\n👋 Disconnected")
 
 
+@click.command()
+@click.option(
+    "--server-url",
+    default="http://localhost:8000",
+    help="MCP server URL"
+)
+@click.option(
+    "--api-key",
+    envvar="SKYFI_API_KEY",
+    help="SkyFi API key (or set SKYFI_API_KEY env var)"
+)
+@click.option(
+    "--demo",
+    is_flag=True,
+    help="Run interactive demo"
+)
+def main(server_url: str, api_key: Optional[str], demo: bool):
+    """CLI wrapper for async main."""
+    asyncio.run(async_main(server_url, api_key, demo))
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

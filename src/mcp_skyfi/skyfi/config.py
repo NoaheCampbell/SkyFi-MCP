@@ -41,10 +41,10 @@ class SkyFiConfig(BaseModel):
     )
     
     @classmethod
-    def from_env(cls) -> "SkyFiConfig":
+    def from_env(cls, require_api_key: bool = True) -> "SkyFiConfig":
         """Create configuration from environment variables."""
-        api_key = os.getenv("SKYFI_API_KEY")
-        if not api_key:
+        api_key = os.getenv("SKYFI_API_KEY", "")
+        if require_api_key and not api_key:
             raise ValueError(
                 "SKYFI_API_KEY environment variable is required. "
                 "Get your API key from app.skyfi.com (Pro account required)."

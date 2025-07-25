@@ -6,7 +6,7 @@ from mcp.types import Tool
 
 async def register_skyfi_tools() -> List[Tool]:
     """Register SkyFi tools with the MCP server."""
-    return [
+    tools = [
         Tool(
             name="skyfi_search_archives",
             description="Search for available satellite imagery in the SkyFi catalog (automatically uses LOW resolution to minimize costs)",
@@ -158,3 +158,10 @@ async def register_skyfi_tools() -> List[Tool]:
             }
         ),
     ]
+    
+    # Add budget tools
+    from .budget_tools import register_budget_tools
+    budget_tools = await register_budget_tools()
+    tools.extend(budget_tools)
+    
+    return tools
