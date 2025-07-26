@@ -215,6 +215,26 @@ mypy src/
 2. Verify the API URL is accessible
 3. Try increasing the timeout in the configuration
 
+## Integration Guides
+
+See [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) for detailed guides on using SkyFi MCP with:
+- Claude Desktop & Cursor
+- Langchain, Vercel AI SDK, ADK
+- OpenAI, Anthropic, Google Gemini
+- Multi-user cloud deployments
+
+## Deployment Options
+
+### Local Installation
+```bash
+pip install git+https://github.com/NoaheCampbell/SkyFi-MCP.git
+```
+
+### Cloud Deployment (Multi-user)
+- Docker + Fly.io deployment included
+- WebSocket bridge for remote access
+- Header-based authentication for multiple users
+
 ## License
 
 MIT License - see LICENSE file for details.
@@ -222,5 +242,6 @@ MIT License - see LICENSE file for details.
 ## Support
 
 - SkyFi API Documentation: [docs.skyfi.com](https://docs.skyfi.com)
+- Integration Guide: [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md)
 - Issues: [GitHub Issues](https://github.com/NoaheCampbell/SkyFi-MCP/issues)
 - SkyFi Support: support@skyfi.com

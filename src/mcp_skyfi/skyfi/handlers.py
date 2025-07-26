@@ -996,6 +996,19 @@ async def handle_skyfi_tool(name: str, arguments: Dict[str, Any]) -> List[TextCo
                 return [TextContent(type="text", text=text)]
             
             else:
+                # Try tasking tools
+                from .tasking_handlers import handle_tasking_tool
+                tasking_tools = [
+                    "skyfi_get_tasking_quote", "skyfi_create_tasking_order",
+                    "skyfi_get_order_status", "skyfi_calculate_archive_pricing",
+                    "skyfi_estimate_tasking_cost", "skyfi_analyze_capture_feasibility",
+                    "skyfi_predict_satellite_passes", "skyfi_create_webhook_subscription",
+                    "skyfi_setup_area_monitoring", "skyfi_get_notification_status"
+                ]
+                
+                if name in tasking_tools:
+                    return await handle_tasking_tool(name, arguments)
+                
                 raise ValueError(f"Unknown SkyFi tool: {name}")
     
     except Exception as e:

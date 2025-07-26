@@ -6,7 +6,7 @@ from mcp.types import Tool
 
 async def register_osm_tools() -> List[Tool]:
     """Register OSM tools with the MCP server."""
-    return [
+    core_tools = [
         Tool(
             name="osm_geocode",
             description="Convert address or place name to coordinates",
@@ -73,3 +73,9 @@ async def register_osm_tools() -> List[Tool]:
             }
         ),
     ]
+    
+    # Add advanced OSM tools
+    from .advanced_tools import register_advanced_osm_tools
+    advanced_tools = await register_advanced_osm_tools()
+    
+    return core_tools + advanced_tools

@@ -108,6 +108,17 @@ async def handle_osm_tool(name: str, arguments: Dict[str, Any]) -> List[TextCont
                 return [TextContent(type="text", text=text)]
             
             else:
+                # Try advanced OSM tools
+                from .advanced_handlers import handle_advanced_osm_tool
+                advanced_tools = [
+                    "osm_batch_geocode", "osm_search_nearby_pois",
+                    "osm_search_businesses", "osm_generate_aoi",
+                    "osm_create_bounding_box", "osm_calculate_distance"
+                ]
+                
+                if name in advanced_tools:
+                    return await handle_advanced_osm_tool(name, arguments)
+                
                 raise ValueError(f"Unknown OSM tool: {name}")
     
     except httpx.RequestError as e:

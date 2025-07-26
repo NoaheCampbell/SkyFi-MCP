@@ -451,4 +451,12 @@ async def register_skyfi_tools() -> List[Tool]:
     account_tools = await register_account_tools()
     tools.extend(account_tools)
     
+    # Add tasking tools
+    from .tasking_tools import register_tasking_tools, register_monitoring_tools
+    tasking_tools = await register_tasking_tools()
+    tools.extend(tasking_tools)
+    
+    monitoring_tools = await register_monitoring_tools()
+    tools.extend(monitoring_tools)
+    
     return tools
