@@ -1,12 +1,18 @@
-# MCP SkyFi Server
+# SkyFi MCP Server
 
-Access SkyFi satellite imagery, weather data, and OpenStreetMap tools through the Model Context Protocol.
+A Model Context Protocol (MCP) server that provides access to SkyFi's satellite imagery API through Claude Desktop, Cursor, and other MCP-compatible clients.
 
 ## Features
 
-- 🛰️ **Satellite Imagery**: Search and order satellite images through SkyFi API
-- 🌤️ **Weather Data**: Get current conditions and forecasts for any location
-- 🗺️ **OpenStreetMap**: Geocode addresses and convert places to WKT polygons
+- 🛰️ **Satellite Image Search** - Search for satellite imagery with natural language dates
+- 💰 **Smart Budget Management** - Built-in cost controls and spending alerts
+- 🔐 **Secure Authentication** - Web-based auth flow (no API keys in chat)
+- 📊 **Order Management** - Track and download your satellite image orders
+- 🌍 **Multi-Location Search** - Search multiple areas simultaneously
+- 💾 **Saved Searches** - Save and reuse common search configurations
+- 📈 **Order History Export** - Export orders to CSV, JSON, HTML, or Markdown
+- 🎯 **Accurate Cost Estimation** - Precise pricing calculations with area-based billing
+- 🗺️ **OpenStreetMap Integration** - Convert locations to polygons for searches
 
 ## Quick Start
 

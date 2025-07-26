@@ -18,14 +18,7 @@ class SkyFiClient:
         """Initialize SkyFi client."""
         self.config = config or SkyFiConfig.from_env()
         self.cost_tracker = CostTracker()
-        self.client = httpx.AsyncClient(
-            base_url=self.config.api_url,
-            headers={
-                "X-Skyfi-Api-Key": self.config.api_key,
-                "Content-Type": "application/json",
-            },
-            timeout=self.config.timeout,
-        )
+        self._create_client()
     
     async def __aenter__(self):
         """Async context manager entry."""
@@ -37,10 +30,55 @@ class SkyFiClient:
     
     async def close(self):
         """Close the HTTP client."""
-        await self.client.aclose()
+        if hasattr(self, 'client'):
+            await self.client.aclose()
+    
+    def _create_client(self):
+        """Create or recreate the HTTP client with current config."""
+        if hasattr(self, 'client'):
+            # Close existing client if it exists
+            try:
+                import asyncio
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    loop.create_task(self.client.aclose())
+                else:
+                    loop.run_until_complete(self.client.aclose())
+            except:
+                pass
+        
+        # Check if API key is pending
+        if self.config.api_key == "PENDING_RUNTIME_CONFIG":
+            # Create a client that will fail gracefully
+            self.client = None
+            return
+        
+        self.client = httpx.AsyncClient(
+            base_url=self.config.api_url,
+            headers={
+                "X-Skyfi-Api-Key": self.config.api_key,
+                "Content-Type": "application/json",
+            },
+            timeout=self.config.timeout,
+        )
+    
+    def update_api_key(self, api_key: str):
+        """Update the API key and recreate the client."""
+        self.config.api_key = api_key
+        self._create_client()
+    
+    async def _ensure_client(self):
+        """Ensure client is ready before making requests."""
+        if self.client is None:
+            if self.config.api_key == "PENDING_RUNTIME_CONFIG":
+                raise ValueError(
+                    "API key not configured. Use 'skyfi_set_api_key' to set your API key."
+                )
+            self._create_client()
     
     async def get_user(self) -> Dict[str, Any]:
         """Get current authenticated user information."""
+        await self._ensure_client()
         response = await self.client.get("/auth/whoami")
         response.raise_for_status()
         return response.json()

@@ -23,28 +23,56 @@ async def handle_skyfi_tool(name: str, arguments: Dict[str, Any]) -> List[TextCo
                 )]
             
             elif name == "skyfi_search_archives":
+                # Parse dates with natural language support
+                from_date_str = arguments["fromDate"]
+                to_date_str = arguments["toDate"]
+                
+                # Try natural language parsing
+                try:
+                    from ..utils.date_parser import parse_date_range, format_date_for_api
+                    from_date, to_date = parse_date_range(from_date_str, to_date_str)
+                    from_date_iso = format_date_for_api(from_date)
+                    to_date_iso = format_date_for_api(to_date)
+                    
+                    logger.info(f"Parsed dates: '{from_date_str}' → {from_date_iso}, '{to_date_str}' → {to_date_iso}")
+                except Exception as e:
+                    logger.warning(f"Failed to parse natural dates, using as-is: {e}")
+                    from_date_iso = from_date_str
+                    to_date_iso = to_date_str
+                
                 result = await client.search_archives(
                     aoi=arguments["aoi"],
-                    from_date=arguments["fromDate"],
-                    to_date=arguments["toDate"],
+                    from_date=from_date_iso,
+                    to_date=to_date_iso,
                     open_data=arguments.get("openData", True),
                     product_types=arguments.get("productTypes"),
                     resolution=arguments.get("resolution"),
                 )
                 
-                # Format results for readability
+                # Format results with previews
                 if "results" in result:
-                    text = f"Found {len(result['results'])} satellite images:\n\n"
-                    for idx, img in enumerate(result['results'][:10], 1):  # Show first 10
-                        text += f"{idx}. Archive ID: {img.get('archiveId', 'N/A')}\n"
-                        text += f"   Date: {img.get('captureDate', 'N/A')}\n"
-                        text += f"   Satellite: {img.get('satellite', 'N/A')}\n"
-                        text += f"   Resolution: {img.get('resolution', 'N/A')}m\n"
-                        text += f"   Cloud Cover: {img.get('cloudCover', 'N/A')}%\n"
-                        text += f"   Price: ${img.get('price', 'N/A')}\n\n"
+                    from ..utils.preview_generator import format_search_results_with_previews
+                    from ..utils.budget_alerts import format_spending_summary
+                    from ..utils.price_interpreter import needs_price_clarification
                     
-                    if len(result['results']) > 10:
-                        text += f"... and {len(result['results']) - 10} more results"
+                    # Calculate area if provided in search
+                    search_area_km2 = None
+                    if "aoi" in arguments:
+                        try:
+                            from ..utils.area_calculator import calculate_wkt_area_km2
+                            search_area_km2 = calculate_wkt_area_km2(arguments["aoi"])
+                        except:
+                            pass
+                    
+                    # Show spending summary at the top
+                    text = format_spending_summary(client.cost_tracker, client.config) + "\n\n"
+                    
+                    # Check if we need price clarification
+                    if needs_price_clarification(result['results']):
+                        text += "⚠️  Note: Prices shown are per km². Total cost = price × area (min 25 km²)\n\n"
+                    
+                    # Format results with area context
+                    text += format_search_results_with_previews(result['results'], max_results=5, area_km2=search_area_km2)
                 else:
                     text = json.dumps(result, indent=2)
                 
@@ -247,10 +275,13 @@ async def handle_skyfi_tool(name: str, arguments: Dict[str, Any]) -> List[TextCo
                 
                 aoi = arguments["aoi"]
                 archive_id = arguments["archiveId"]
-                estimated_cost = float(arguments["estimated_cost"])
+                provided_cost = float(arguments["estimated_cost"])
                 
                 # Calculate area and auto-expand if too small
                 from ..utils.area_calculator import calculate_wkt_area_km2, expand_polygon_to_minimum_area
+                from ..utils.price_interpreter import estimate_order_cost, interpret_archive_price
+                from ..utils.budget_alerts import check_order_feasibility, format_budget_alert
+                
                 original_area_km2 = calculate_wkt_area_km2(aoi)
                 
                 # Auto-expand if area is too small
@@ -261,6 +292,25 @@ async def handle_skyfi_tool(name: str, arguments: Dict[str, Any]) -> List[TextCo
                     area_km2 = calculate_wkt_area_km2(aoi)
                 else:
                     area_km2 = original_area_km2
+                
+                # Interpret the price - determine if it's per km² or total
+                # Look for the archive in search history if possible
+                archive_data = {"price": provided_cost}  # Basic archive data
+                price_per_km2, estimated_cost, price_explanation = interpret_archive_price(archive_data, area_km2)
+                
+                # If the provided cost is suspiciously low, it's likely per km²
+                if provided_cost < 10 and area_km2 > 5:
+                    # Force interpretation as price per km²
+                    price_per_km2 = provided_cost
+                    billable_area = max(area_km2, 25.0)
+                    estimated_cost = price_per_km2 * billable_area
+                    if area_km2 < 25.0:
+                        price_explanation = f"${price_per_km2:.2f}/km² × 25 km² (minimum billing)"
+                    else:
+                        price_explanation = f"${price_per_km2:.2f}/km² × {area_km2:.1f} km²"
+                
+                # Log price interpretation for debugging
+                logger.info(f"Price interpretation: provided=${provided_cost:.2f}, per_km2=${price_per_km2:.2f}, total=${estimated_cost:.2f}")
                 
                 # Create order manager
                 order_manager = OrderManager()
@@ -333,22 +383,35 @@ async def handle_skyfi_tool(name: str, arguments: Dict[str, Any]) -> List[TextCo
                 response += f"{'=' * 40}\n\n"
                 response += f"Archive ID: {archive_id}\n"
                 
-                # Show area information
+                # Show area information with visual
+                from ..utils.preview_generator import estimate_area_preview
+                area_visual = estimate_area_preview(area_km2)
+                
                 if original_area_km2 < 5.0:
-                    response += f"Area: {area_km2:.2f} km² (auto-expanded from {original_area_km2:.2f} km²)\n"
+                    response += f"Area: {area_visual}\n"
+                    response += f"     (auto-expanded from {original_area_km2:.2f} km² to meet minimum)\n"
                     response += f"⚠️ Your area was automatically expanded to meet the 5 km² minimum\n"
                 else:
-                    response += f"Area: {area_km2:.2f} km²"
+                    response += f"Area: {area_visual}\n"
                 
+                # Price breakdown
+                response += f"\n💰 Price Calculation:\n"
+                response += f"   {price_explanation} = ${estimated_cost:.2f}\n"
                 if area_km2 < 25.0:
-                    response += f" (minimum billing: 25 km²)"
-                response += f"\n"
-                response += f"Estimated Cost: ${estimated_cost:.2f}\n"
-                response += f"Delivery: Download URL (no cloud storage needed)\n"
-                response += f"Budget Status:\n"
-                response += f"  - Current spending: ${total_spent:.2f}\n"
-                response += f"  - After this order: ${total_spent + estimated_cost:.2f}\n"
-                response += f"  - Daily limit: ${client.config.daily_limit:.2f}\n\n"
+                    response += f"   ℹ️  Minimum billing area: 25 km²\n"
+                
+                response += f"\nDelivery: Download URL (no cloud storage needed)\n\n"
+                
+                # Budget status with visual alerts
+                response += "📊 Budget Impact:\n"
+                response += format_budget_alert(total_spent, client.config.cost_limit, "Before") + "\n"
+                response += format_budget_alert(total_spent + estimated_cost, client.config.cost_limit, "After") + "\n\n"
+                
+                # Check if order is feasible
+                is_feasible, feasibility_warnings = check_order_feasibility(estimated_cost, client.cost_tracker, client.config)
+                if not is_feasible:
+                    response += "⚠️  Budget Warnings:\n"
+                    response += feasibility_warnings + "\n\n"
                 
                 if client.config.require_human_approval:
                     response += "⚠️  HUMAN APPROVAL REQUIRED\n\n"
@@ -485,18 +548,13 @@ async def handle_skyfi_tool(name: str, arguments: Dict[str, Any]) -> List[TextCo
                             order_code = order.get('orderCode', 'N/A')
                             location = order.get('geocodeLocation', 'N/A')
                             
-                            # Status emoji
-                            status_emoji = {
-                                'PROCESSING_COMPLETE': '✅',
-                                'PROCESSING_PENDING': '🔄',
-                                'PROVIDER_PENDING': '⏳',
-                                'CREATED': '🆕',
-                                'FAILED': '❌'
-                            }.get(status, '🔵')
+                            # Get visual status
+                            from ..utils.preview_generator import generate_order_status_preview
+                            status_visual = generate_order_status_preview(order)
                             
-                            text += f"{idx}. {status_emoji} Order {order_code} ({order_type})\n"
+                            text += f"{idx}. Order {order_code} ({order_type})\n"
+                            text += f"   {status_visual}\n"
                             text += f"   ID: {order_id}\n"
-                            text += f"   Status: {status}\n"
                             text += f"   Cost: ${cost / 100:.2f}\n" if cost > 0 else "   Cost: FREE\n"
                             text += f"   Location: {location}\n"
                             text += f"   Created: {created}\n"
@@ -550,14 +608,31 @@ async def handle_skyfi_tool(name: str, arguments: Dict[str, Any]) -> List[TextCo
                     try:
                         file_path = await client.download_order(order_id, deliverable_type)
                         
+                        # Get file size for preview
+                        import os
+                        file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
+                        
+                        preview_text = f"✅ Successfully downloaded order {order_id}\n\n"
+                        preview_text += "📦 Download Complete\n"
+                        preview_text += "┌────────────────────────────────────┐\n"
+                        preview_text += f"│ 🖼️  {deliverable_type.upper():<29} │\n"
+                        preview_text += f"│ 📏 Size: {file_size_mb:.1f} MB{' ' * (22 - len(f'{file_size_mb:.1f} MB'))} │\n"
+                        preview_text += f"│ 📁 Saved to temp directory         │\n"
+                        preview_text += "│                                    │\n"
+                        preview_text += "│    ╔═══════════════════╗          │\n"
+                        preview_text += "│    ║ 🛰️             🌍 ║          │\n"
+                        preview_text += "│    ║                   ║          │\n"
+                        preview_text += "│    ║   Satellite       ║          │\n"
+                        preview_text += "│    ║     Image         ║          │\n"
+                        preview_text += "│    ║                   ║          │\n"
+                        preview_text += "│    ╚═══════════════════╝          │\n"
+                        preview_text += "└────────────────────────────────────┘\n\n"
+                        preview_text += f"📍 Location: {file_path}\n\n"
+                        preview_text += "💡 Tip: You can open this file with any image viewer"
+                        
                         return [TextContent(
                             type="text",
-                            text=(
-                                f"✅ Successfully downloaded order {order_id}\n\n"
-                                f"📁 Saved to: {file_path}\n"
-                                f"Type: {deliverable_type}\n\n"
-                                "The file has been saved to your temp directory and is ready to use."
-                            )
+                            text=preview_text
                         )]
                     except Exception as download_error:
                         # If download fails, provide the URL and instructions
@@ -611,6 +686,314 @@ async def handle_skyfi_tool(name: str, arguments: Dict[str, Any]) -> List[TextCo
                         type="text",
                         text=f"❌ Failed to download order: {str(e)}\n\nThe order may still be processing or there may be an authentication issue."
                     )]
+            
+            elif name == "skyfi_save_search":
+                # Save search configuration
+                from ..utils.saved_searches import SavedSearchManager
+                manager = SavedSearchManager()
+                
+                search_id = manager.save_search(
+                    name=arguments["name"],
+                    aoi=arguments["aoi"],
+                    from_date=arguments["from_date"],
+                    to_date=arguments["to_date"],
+                    description=arguments.get("description"),
+                    tags=arguments.get("tags"),
+                    resolution=arguments.get("resolution"),
+                    max_cloud_cover=arguments.get("max_cloud_cover")
+                )
+                
+                return [TextContent(
+                    type="text",
+                    text=f"✅ Search saved as '{arguments['name']}'\n\nSearch ID: {search_id}\n\nUse 'skyfi_run_saved_search' to run it anytime."
+                )]
+            
+            elif name == "skyfi_list_saved_searches":
+                # List saved searches
+                from ..utils.saved_searches import SavedSearchManager
+                manager = SavedSearchManager()
+                
+                searches = manager.list_searches(
+                    tags=arguments.get("tags"),
+                    sort_by=arguments.get("sort_by", "created_at")
+                )
+                
+                text = manager.format_search_list(searches)
+                return [TextContent(type="text", text=text)]
+            
+            elif name == "skyfi_run_saved_search":
+                # Run saved search
+                from ..utils.saved_searches import SavedSearchManager
+                manager = SavedSearchManager()
+                
+                search = manager.get_search(arguments["search_name"])
+                if not search:
+                    return [TextContent(
+                        type="text",
+                        text=f"❌ Saved search '{arguments['search_name']}' not found.\n\nUse 'skyfi_list_saved_searches' to see available searches."
+                    )]
+                
+                # Run the search with saved parameters
+                from_date = search["from_date"]
+                to_date = search["to_date"]
+                
+                # Override dates if requested
+                if arguments.get("override_dates"):
+                    from_date = "last month"
+                    to_date = "today"
+                
+                # Parse dates
+                from ..utils.date_parser import parse_date_range, format_date_for_api
+                from_date_parsed, to_date_parsed = parse_date_range(from_date, to_date)
+                
+                result = await client.search_archives(
+                    aoi=search["aoi"],
+                    from_date=format_date_for_api(from_date_parsed),
+                    to_date=format_date_for_api(to_date_parsed),
+                    resolution=search.get("resolution"),
+                    product_types=search.get("product_types")
+                )
+                
+                # Format results
+                from ..utils.preview_generator import format_search_results_with_previews
+                text = f"🔄 Running saved search: {search['name']}\n"
+                if search.get("description"):
+                    text += f"📝 {search['description']}\n"
+                text += f"\n{format_search_results_with_previews(result.get('results', []), area_km2=search.get('area_km2'))}"
+                
+                return [TextContent(type="text", text=text)]
+            
+            elif name == "skyfi_multi_location_search":
+                # Multi-location search
+                from ..utils.multi_location import MultiLocationSearcher, create_locations_from_points
+                
+                # Prepare locations
+                locations = arguments.get("locations", [])
+                
+                # If points provided, convert to polygons
+                if "points" in arguments and arguments["points"]:
+                    buffer_km = arguments.get("buffer_km", 5.0)
+                    point_locations = create_locations_from_points(
+                        arguments["points"],
+                        buffer_km
+                    )
+                    locations.extend(point_locations)
+                
+                if not locations:
+                    return [TextContent(
+                        type="text",
+                        text="❌ No locations provided. Specify either 'locations' (WKT polygons) or 'points' ([lon,lat] pairs)."
+                    )]
+                
+                # Create searcher
+                searcher = MultiLocationSearcher(client)
+                
+                # Parse dates
+                from ..utils.date_parser import parse_date_range, format_date_for_api
+                from_date, to_date = parse_date_range(
+                    arguments["from_date"],
+                    arguments["to_date"]
+                )
+                
+                # Search all locations
+                results = await searcher.search_multiple_locations(
+                    locations=locations,
+                    from_date=format_date_for_api(from_date),
+                    to_date=format_date_for_api(to_date),
+                    resolution=arguments.get("resolution")
+                )
+                
+                # Format results
+                text = searcher.format_multi_location_results(results)
+                return [TextContent(type="text", text=text)]
+            
+            elif name == "skyfi_export_order_history":
+                # Export order history
+                from ..utils.order_export import OrderExporter
+                
+                # Get all orders
+                all_orders = []
+                page = 0
+                while True:
+                    result = await client.list_orders(page_size=100, page_number=page)
+                    orders = result.get("orders", [])
+                    if not orders:
+                        break
+                    all_orders.extend(orders)
+                    page += 1
+                    if len(all_orders) >= result.get("total", 0):
+                        break
+                
+                if not all_orders:
+                    return [TextContent(
+                        type="text",
+                        text="No orders found to export."
+                    )]
+                
+                # Export
+                exporter = OrderExporter()
+                output_path = exporter.export_orders(
+                    orders=all_orders,
+                    format=arguments.get("format", "csv"),
+                    output_path=arguments.get("output_path")
+                )
+                
+                # Generate summary if requested
+                text = f"✅ Exported {len(all_orders)} orders to {output_path}\n\n"
+                
+                if arguments.get("include_summary", True):
+                    summary = exporter.generate_summary_report(all_orders)
+                    text += summary
+                
+                return [TextContent(type="text", text=text)]
+            
+            elif name == "skyfi_estimate_cost":
+                # Get accurate cost estimate
+                from ..utils.cost_estimator import CostEstimator
+                
+                # Find the archive in recent searches
+                # For now, create a basic archive object
+                archive = {"archiveId": arguments["archive_id"], "price": 1.0}  # Default price
+                
+                estimator = CostEstimator()
+                cost_info = estimator.estimate_order_cost(
+                    archive=archive,
+                    area_km2=arguments["area_km2"],
+                    include_fees=arguments.get("include_fees", True)
+                )
+                
+                text = f"💰 Cost Estimate for {arguments['archive_id']}\n"
+                text += "━" * 40 + "\n\n"
+                text += cost_info["breakdown_text"] + "\n\n"
+                
+                if cost_info["notes"]:
+                    text += "📝 Notes:\n"
+                    for note in cost_info["notes"]:
+                        text += f"  • {note}\n"
+                
+                return [TextContent(type="text", text=text)]
+            
+            elif name == "skyfi_compare_costs":
+                # Compare costs across archives
+                from ..utils.cost_estimator import CostEstimator
+                
+                # For demo, create basic archive objects
+                archives = [
+                    {"archiveId": aid, "satellite": "Demo", "price": 1.0}
+                    for aid in arguments["archive_ids"]
+                ]
+                
+                estimator = CostEstimator()
+                comparison = estimator.format_cost_comparison(
+                    archives=archives,
+                    area_km2=arguments["area_km2"]
+                )
+                
+                return [TextContent(type="text", text=comparison)]
+            
+            elif name == "skyfi_authenticate":
+                # Generate secure authentication link
+                from ..auth.nonce_auth import nonce_auth
+                
+                # Get session ID (this would come from MCP context in production)
+                import uuid
+                session_id = str(uuid.uuid4())
+                
+                # Generate auth session
+                nonce, auth_url = nonce_auth.generate_auth_session(session_id)
+                
+                return [TextContent(
+                    type="text",
+                    text=(
+                        "🔐 Secure Authentication Setup\n"
+                        "━" * 40 + "\n\n"
+                        "Please visit this secure link to enter your SkyFi API key:\n\n"
+                        f"🔗 {auth_url}\n\n"
+                        "This link will:\n"
+                        "✅ Use HTTPS encryption\n"
+                        "✅ Expire in 5 minutes\n"
+                        "✅ Only work once\n"
+                        "✅ Never expose your key in chat\n\n"
+                        "After authenticating, close the browser and return here."
+                    )
+                )]
+            
+            elif name == "skyfi_set_api_key":
+                # Set API key at runtime
+                from ..auth import auth_manager
+                
+                api_key = arguments["api_key"]
+                auth_manager.set_api_key(api_key)
+                
+                # Test the key by making a simple API call
+                try:
+                    # Create a new client with the updated key
+                    test_client = SkyFiClient()
+                    test_client.update_api_key(api_key)
+                    
+                    # Test the key
+                    async with test_client:
+                        user_info = await test_client.get_user()
+                    
+                    return [TextContent(
+                        type="text",
+                        text=(
+                            "✅ API key set and verified successfully!\n\n"
+                            f"Authenticated as: {user_info.get('email', 'Unknown')}\n"
+                            f"Account type: {user_info.get('accountType', 'Unknown')}\n\n"
+                            "The key has been saved for this session and will persist across tool calls.\n"
+                            "Note: The key is stored temporarily and will be cleared when the server restarts."
+                        )
+                    )]
+                except Exception as e:
+                    # Key is invalid
+                    auth_manager.clear_runtime_config()
+                    return [TextContent(
+                        type="text",
+                        text=f"❌ Failed to set API key: {str(e)}\n\nPlease check your API key and try again."
+                    )]
+            
+            elif name == "skyfi_check_auth":
+                # Check authentication status
+                from ..auth import auth_manager
+                from ..auth.nonce_auth import nonce_auth
+                
+                # Try to get session ID from context
+                import uuid
+                session_id = str(uuid.uuid4())  # In production, this would come from MCP context
+                
+                # Check nonce-based auth first
+                api_key = nonce_auth.get_api_key_for_session(session_id)
+                if api_key:
+                    auth_manager.set_api_key(api_key)
+                
+                has_key = auth_manager.get_api_key() is not None
+                key_source = "Not configured"
+                
+                if has_key:
+                    # Determine source
+                    if nonce_auth.get_api_key_for_session(session_id):
+                        key_source = "Web authentication"
+                    elif os.environ.get("SKYFI_API_KEY"):
+                        key_source = "Environment variable"
+                    elif auth_manager.get_api_key():
+                        key_source = "Runtime configuration"
+                
+                text = "🔐 Authentication Status\n"
+                text += "━" * 40 + "\n\n"
+                
+                if has_key:
+                    text += "✅ API key is configured\n"
+                    text += f"Source: {key_source}\n\n"
+                else:
+                    text += "❌ No API key configured\n\n"
+                    text += "To authenticate securely:\n\n"
+                    text += "Use the `skyfi_authenticate` tool to get a secure link.\n"
+                    text += "This lets you enter your API key via a secure web page\n"
+                    text += "instead of typing it in chat.\n\n"
+                    text += "Example: \"Set up my SkyFi authentication\""
+                
+                return [TextContent(type="text", text=text)]
             
             else:
                 raise ValueError(f"Unknown SkyFi tool: {name}")

@@ -3,6 +3,7 @@ import os
 from typing import Optional
 
 from pydantic import BaseModel, Field
+from ..auth import auth_manager
 
 
 class SkyFiConfig(BaseModel):
@@ -43,12 +44,16 @@ class SkyFiConfig(BaseModel):
     @classmethod
     def from_env(cls, require_api_key: bool = True) -> "SkyFiConfig":
         """Create configuration from environment variables."""
-        api_key = os.getenv("SKYFI_API_KEY", "")
+        # Try auth manager first
+        api_key = auth_manager.get_api_key()
+        
+        # Fall back to environment variable
+        if not api_key:
+            api_key = os.getenv("SKYFI_API_KEY", "")
+        
         if require_api_key and not api_key:
-            raise ValueError(
-                "SKYFI_API_KEY environment variable is required. "
-                "Get your API key from app.skyfi.com (Pro account required)."
-            )
+            # Don't raise immediately - allow runtime configuration
+            api_key = "PENDING_RUNTIME_CONFIG"
         
         return cls(
             api_key=api_key,

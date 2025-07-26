@@ -45,7 +45,7 @@ def forward_stdio_to_tcp(host, port):
 
 if __name__ == "__main__":
     # Get connection details from environment or args
-    host = os.environ.get('MCP_REMOTE_HOST', '192.168.1.220')
+    host = os.environ.get('MCP_REMOTE_HOST', 'localhost')
     port = int(os.environ.get('MCP_REMOTE_PORT', '5000'))
     
     if len(sys.argv) > 1:

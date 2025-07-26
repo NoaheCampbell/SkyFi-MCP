@@ -59,3 +59,38 @@ dmypy.json
 # OS
 .DS_Store
 Thumbs.db
+
+# Logs
+*.log
+logs/
+/var/log/
+
+# Runtime files
+skyfi-runtime-config.json
+/tmp/skyfi-*
+temp/
+downloads/
+
+# Ngrok
+ngrok.yml
+ngrok-config.yml
+.ngrok2/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Orders and downloads
+orders/
+*.tif
+*.tiff
+*.geotiff
+satellite_images/
+
+# Session data
+sessions/
+.skyfi/config.json
+
+# Node (for transport wrappers)
+node_modules/

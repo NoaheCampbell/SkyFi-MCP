@@ -1,0 +1,20 @@
+[Unit]
+Description=SkyFi MCP Server
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/mcp-skyfi
+Environment="PATH=/home/ubuntu/mcp-skyfi/venv/bin:/usr/local/bin:/usr/bin:/bin"
+EnvironmentFile=/home/ubuntu/mcp-skyfi/.env
+ExecStart=/home/ubuntu/mcp-skyfi/scripts/start_production_server.sh
+Restart=always
+RestartSec=10
+
+# Logging
+StandardOutput=append:/var/log/skyfi-mcp/server.log
+StandardError=append:/var/log/skyfi-mcp/error.log
+
+[Install]
+WantedBy=multi-user.target

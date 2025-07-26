@@ -9,7 +9,7 @@ async def register_skyfi_tools() -> List[Tool]:
     tools = [
         Tool(
             name="skyfi_search_archives",
-            description="Search for available satellite imagery in the SkyFi catalog (automatically uses LOW resolution to minimize costs)",
+            description="Search for satellite imagery. Supports natural language dates like 'last week', 'past month', 'yesterday'. Automatically uses LOW resolution to minimize costs.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -19,13 +19,11 @@ async def register_skyfi_tools() -> List[Tool]:
                     },
                     "fromDate": {
                         "type": "string",
-                        "format": "date-time",
-                        "description": "Start date for search (ISO 8601 format, e.g., 2024-01-01T00:00:00Z)"
+                        "description": "Start date (supports natural language: 'yesterday', 'last week', '2 weeks ago', 'January 15', or ISO format)"
                     },
                     "toDate": {
                         "type": "string",
-                        "format": "date-time",
-                        "description": "End date for search (ISO 8601 format)"
+                        "description": "End date (supports natural language: 'today', 'now', or ISO format)"
                     },
                     "openData": {
                         "type": "boolean",
@@ -227,6 +225,218 @@ async def register_skyfi_tools() -> List[Tool]:
                     }
                 },
                 "required": ["order_id"]
+            }
+        ),
+        Tool(
+            name="skyfi_save_search",
+            description="Save a search configuration for quick re-use later",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Unique name for this saved search"
+                    },
+                    "aoi": {
+                        "type": "string",
+                        "description": "Area of Interest as WKT polygon"
+                    },
+                    "from_date": {
+                        "type": "string",
+                        "description": "Start date (can be natural language)"
+                    },
+                    "to_date": {
+                        "type": "string",
+                        "description": "End date (can be natural language)"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Optional description of this search"
+                    },
+                    "tags": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Tags for categorization (e.g., 'project-x', 'monthly')"
+                    },
+                    "resolution": {
+                        "type": "string",
+                        "enum": ["LOW", "MEDIUM", "HIGH", "VERY_HIGH"],
+                        "description": "Preferred resolution"
+                    },
+                    "max_cloud_cover": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 100,
+                        "description": "Maximum acceptable cloud cover percentage"
+                    }
+                },
+                "required": ["name", "aoi", "from_date", "to_date"]
+            }
+        ),
+        Tool(
+            name="skyfi_list_saved_searches",
+            description="List all saved searches",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "tags": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Filter by tags"
+                    },
+                    "sort_by": {
+                        "type": "string",
+                        "enum": ["created_at", "last_used", "use_count", "name"],
+                        "default": "created_at",
+                        "description": "Sort order"
+                    }
+                },
+                "required": []
+            }
+        ),
+        Tool(
+            name="skyfi_run_saved_search",
+            description="Run a previously saved search by name or ID",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "search_name": {
+                        "type": "string",
+                        "description": "Name or ID of the saved search"
+                    },
+                    "override_dates": {
+                        "type": "boolean",
+                        "default": False,
+                        "description": "Use current dates instead of saved dates"
+                    }
+                },
+                "required": ["search_name"]
+            }
+        ),
+        Tool(
+            name="skyfi_multi_location_search",
+            description="Search multiple locations at once. Provide either a list of WKT polygons or points to search around.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "locations": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of WKT polygons to search"
+                    },
+                    "points": {
+                        "type": "array",
+                        "items": {
+                            "type": "array",
+                            "items": {"type": "number"},
+                            "minItems": 2,
+                            "maxItems": 2
+                        },
+                        "description": "List of [longitude, latitude] points to search around"
+                    },
+                    "buffer_km": {
+                        "type": "number",
+                        "default": 5.0,
+                        "description": "Buffer radius in km (only used with points)"
+                    },
+                    "from_date": {
+                        "type": "string",
+                        "description": "Start date for all locations"
+                    },
+                    "to_date": {
+                        "type": "string",
+                        "description": "End date for all locations"
+                    },
+                    "resolution": {
+                        "type": "string",
+                        "enum": ["LOW", "MEDIUM", "HIGH", "VERY_HIGH"],
+                        "description": "Desired resolution"
+                    }
+                },
+                "required": ["from_date", "to_date"]
+            }
+        ),
+        Tool(
+            name="skyfi_export_order_history",
+            description="Export order history to various formats",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "format": {
+                        "type": "string",
+                        "enum": ["csv", "json", "html", "markdown"],
+                        "default": "csv",
+                        "description": "Export format"
+                    },
+                    "output_path": {
+                        "type": "string",
+                        "description": "Output file path (auto-generated if not provided)"
+                    },
+                    "include_summary": {
+                        "type": "boolean",
+                        "default": True,
+                        "description": "Include summary statistics"
+                    }
+                },
+                "required": []
+            }
+        ),
+        Tool(
+            name="skyfi_estimate_cost",
+            description="Get accurate cost estimate for an order with detailed breakdown",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "archive_id": {
+                        "type": "string",
+                        "description": "Archive ID from search results"
+                    },
+                    "area_km2": {
+                        "type": "number",
+                        "description": "Area in square kilometers"
+                    },
+                    "include_fees": {
+                        "type": "boolean",
+                        "default": True,
+                        "description": "Include processing fees in estimate"
+                    }
+                },
+                "required": ["archive_id", "area_km2"]
+            }
+        ),
+        Tool(
+            name="skyfi_compare_costs",
+            description="Compare costs across multiple archives for the same area",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "archive_ids": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of archive IDs to compare"
+                    },
+                    "area_km2": {
+                        "type": "number",
+                        "description": "Area in square kilometers"
+                    }
+                },
+                "required": ["archive_ids", "area_km2"]
+            }
+        ),
+        Tool(
+            name="skyfi_authenticate",
+            description="Generate a secure authentication link for setting up your SkyFi API key. Use this instead of typing your API key in chat.",
+            inputSchema={
+                "type": "object",
+                "properties": {}
+            }
+        ),
+        Tool(
+            name="skyfi_check_auth",
+            description="Check current authentication status",
+            inputSchema={
+                "type": "object",
+                "properties": {}
             }
         ),
     ]
