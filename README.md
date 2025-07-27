@@ -365,10 +365,11 @@ See [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) for detailed guides on using Sk
 pip install git+https://github.com/NoaheCampbell/SkyFi-MCP.git
 ```
 
-### Cloud Deployment (Multi-user)
-- Docker + Fly.io deployment included
+### Cloud Deployment
+- AWS deployment guide: [docs/AWS_DEPLOYMENT_GUIDE.md](docs/AWS_DEPLOYMENT_GUIDE.md)
+- Docker support for containerized deployments
 - WebSocket bridge for remote access
-- Header-based authentication for multiple users
+- Built-in AWS Secrets Manager and Parameter Store integration
 
 ## License
 
