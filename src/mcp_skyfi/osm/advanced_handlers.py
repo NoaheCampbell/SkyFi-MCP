@@ -7,7 +7,6 @@ import asyncio
 
 from mcp.types import TextContent
 
-from .client import OSMClient
 from .advanced_tools import (
     haversine_distance, 
     create_polygon_wkt, 
@@ -20,16 +19,8 @@ logger = logging.getLogger(__name__)
 async def handle_advanced_osm_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
     """Handle advanced OSM tool calls."""
     try:
-        if name == "osm_batch_geocode":
-            return await batch_geocode(arguments)
-        elif name == "osm_search_nearby_pois":
-            return await search_nearby_pois(arguments)
-        elif name == "osm_search_businesses":
-            return await search_businesses(arguments)
-        elif name == "osm_generate_aoi":
+        if name == "osm_generate_aoi":
             return await generate_aoi(arguments)
-        elif name == "osm_create_bounding_box":
-            return await create_bounding_box(arguments)
         elif name == "osm_calculate_distance":
             return await calculate_distance(arguments)
         else:
@@ -39,7 +30,7 @@ async def handle_advanced_osm_tool(name: str, arguments: Dict[str, Any]) -> List
         return [TextContent(type="text", text=f"❌ Error: {str(e)}")]
 
 
-async def batch_geocode(arguments: Dict[str, Any]) -> List[TextContent]:
+async def _removed_batch_geocode(arguments: Dict[str, Any]) -> List[TextContent]:
     """Batch geocode multiple locations."""
     locations = arguments["locations"]
     country_code = arguments.get("country_code")
@@ -96,7 +87,7 @@ async def batch_geocode(arguments: Dict[str, Any]) -> List[TextContent]:
         return [TextContent(type="text", text=text)]
 
 
-async def search_nearby_pois(arguments: Dict[str, Any]) -> List[TextContent]:
+async def _removed_search_nearby_pois(arguments: Dict[str, Any]) -> List[TextContent]:
     """Search for POIs near a location."""
     lat = arguments["lat"]
     lon = arguments["lon"]
@@ -185,7 +176,7 @@ async def search_nearby_pois(arguments: Dict[str, Any]) -> List[TextContent]:
         return [TextContent(type="text", text=text)]
 
 
-async def search_businesses(arguments: Dict[str, Any]) -> List[TextContent]:
+async def _removed_search_businesses(arguments: Dict[str, Any]) -> List[TextContent]:
     """Search for specific businesses."""
     query = arguments["query"]
     near = arguments["near"]
@@ -323,7 +314,7 @@ async def generate_aoi(arguments: Dict[str, Any]) -> List[TextContent]:
     return [TextContent(type="text", text=text)]
 
 
-async def create_bounding_box(arguments: Dict[str, Any]) -> List[TextContent]:
+async def _removed_create_bounding_box(arguments: Dict[str, Any]) -> List[TextContent]:
     """Create a bounding box from points."""
     points = arguments["points"]
     padding_km = arguments.get("padding_km", 0)

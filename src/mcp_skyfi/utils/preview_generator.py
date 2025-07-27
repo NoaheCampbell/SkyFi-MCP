@@ -207,3 +207,27 @@ def estimate_area_preview(area_km2: float) -> str:
         visual = "🌆"
     
     return f"{visual} {area_km2:.1f} km² ({comparison})"
+
+
+def format_cost_breakdown(cost_components: Dict[str, float], total_cost: float) -> str:
+    """
+    Format a cost breakdown for display.
+    
+    Args:
+        cost_components: Dictionary of cost components
+        total_cost: Total cost
+        
+    Returns:
+        Formatted cost breakdown string
+    """
+    text = "💰 Cost Breakdown:\n"
+    text += "─" * 30 + "\n"
+    
+    # Show each component
+    for component, amount in cost_components.items():
+        text += f"  {component}: ${amount:.2f}\n"
+    
+    text += "─" * 30 + "\n"
+    text += f"  Total: ${total_cost:.2f}\n"
+    
+    return text

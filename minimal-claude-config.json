@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "echo-test": {
+      "command": "echo",
+      "args": ["Hello from MCP"],
+      "transport": "stdio"
+    },
+    "skyfi-local": {
+      "command": "python3",
+      "args": ["-m", "mcp_skyfi"],
+      "cwd": "/path/to/skyfi-mcp",
+      "env": {
+        "SKYFI_API_KEY": "your-key-here",
+        "WEATHER_API_KEY": "your-key-here"
+      },
+      "transport": "stdio"
+    }
+  }
+}

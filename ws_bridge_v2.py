@@ -10,7 +10,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 async def handle_websocket(websocket, path):
-    """Bridge WebSocket to MCP stdio."""
+    """Bridge WebSocket to MCP stdio with proper initialization handling."""
     logger.info(f"New connection from {websocket.remote_address}")
     
     # Extract API key from headers if provided
@@ -21,12 +21,10 @@ async def handle_websocket(websocket, path):
             if auth_header.startswith('Bearer '):
                 api_key = auth_header[7:]
     except:
-        # Headers not available or different API version
         pass
     
     # Start MCP server process
     env = os.environ.copy()
-    # Only set NGROK_DOMAIN if provided
     if 'NGROK_DOMAIN' in os.environ:
         env['NGROK_DOMAIN'] = os.environ['NGROK_DOMAIN']
     if api_key:
@@ -44,12 +42,38 @@ async def handle_websocket(websocket, path):
         env=env
     )
     
+    # Track initialization state
+    initialized = False
+    pending_messages = []
+    
     async def ws_to_stdin():
+        nonlocal initialized, pending_messages
         try:
             async for message in websocket:
                 logger.debug(f"WS -> MCP: {message}")
-                proc.stdin.write(message.encode() + b'\n')
-                await proc.stdin.drain()
+                
+                # Parse the message to check if it's an initialize request
+                try:
+                    msg_data = json.loads(message)
+                    if msg_data.get('method') == 'initialize':
+                        # Send initialize immediately
+                        proc.stdin.write(message.encode() + b'\n')
+                        await proc.stdin.drain()
+                        # Don't mark as initialized yet - wait for response
+                    elif not initialized:
+                        # Queue non-initialize messages until initialized
+                        logger.info(f"Queueing message until initialization complete: {msg_data.get('method')}")
+                        pending_messages.append(message)
+                    else:
+                        # Normal message flow after initialization
+                        proc.stdin.write(message.encode() + b'\n')
+                        await proc.stdin.drain()
+                except json.JSONDecodeError:
+                    # If not JSON, just pass through
+                    if initialized:
+                        proc.stdin.write(message.encode() + b'\n')
+                        await proc.stdin.drain()
+                    
         except websockets.exceptions.ConnectionClosed:
             logger.info("WebSocket connection closed")
         except Exception as e:
@@ -58,6 +82,7 @@ async def handle_websocket(websocket, path):
             proc.stdin.close()
     
     async def stdout_to_ws():
+        nonlocal initialized, pending_messages
         try:
             while True:
                 line = await proc.stdout.readline()
@@ -67,6 +92,25 @@ async def handle_websocket(websocket, path):
                 if decoded:
                     logger.debug(f"MCP -> WS: {decoded}")
                     await websocket.send(decoded)
+                    
+                    # Check if this is an initialize response
+                    try:
+                        msg_data = json.loads(decoded)
+                        if (msg_data.get('id') == 1 and 
+                            'result' in msg_data and 
+                            'serverInfo' in msg_data['result']):
+                            logger.info("Initialization complete, processing pending messages")
+                            initialized = True
+                            
+                            # Send any pending messages
+                            for pending in pending_messages:
+                                logger.info(f"Sending pending message: {json.loads(pending).get('method')}")
+                                proc.stdin.write(pending.encode() + b'\n')
+                                await proc.stdin.drain()
+                            pending_messages.clear()
+                    except json.JSONDecodeError:
+                        pass
+                        
         except websockets.exceptions.ConnectionClosed:
             logger.info("WebSocket connection closed during send")
         except Exception as e:

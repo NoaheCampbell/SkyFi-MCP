@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "skyfi-mcp": {
+      "command": "docker",
+      "args": ["run", "--rm", "-i", "-e", "WEATHER_API_KEY=YOUR_API_KEY", "skyfi-mcp:latest"],
+      "transport": "stdio"
+    }
+  }
+}

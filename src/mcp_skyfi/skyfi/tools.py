@@ -184,26 +184,6 @@ async def register_skyfi_tools() -> List[Tool]:
             }
         ),
         Tool(
-            name="skyfi_get_download_url",
-            description="Download a completed order file. Automatically downloads to temp directory and returns the file path.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "order_id": {
-                        "type": "string",
-                        "description": "Order ID from the confirmed order or order list"
-                    },
-                    "deliverable_type": {
-                        "type": "string",
-                        "enum": ["image", "payload", "tiles"],
-                        "default": "image",
-                        "description": "Type of deliverable to download (image=visual imagery, payload=full package, tiles=tile service)"
-                    }
-                },
-                "required": ["order_id"]
-            }
-        ),
-        Tool(
             name="skyfi_download_order",
             description="Download a completed order file to local disk. Automatically handles authentication.",
             inputSchema={
@@ -225,92 +205,6 @@ async def register_skyfi_tools() -> List[Tool]:
                     }
                 },
                 "required": ["order_id"]
-            }
-        ),
-        Tool(
-            name="skyfi_save_search",
-            description="Save a search configuration for quick re-use later",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "name": {
-                        "type": "string",
-                        "description": "Unique name for this saved search"
-                    },
-                    "aoi": {
-                        "type": "string",
-                        "description": "Area of Interest as WKT polygon"
-                    },
-                    "from_date": {
-                        "type": "string",
-                        "description": "Start date (can be natural language)"
-                    },
-                    "to_date": {
-                        "type": "string",
-                        "description": "End date (can be natural language)"
-                    },
-                    "description": {
-                        "type": "string",
-                        "description": "Optional description of this search"
-                    },
-                    "tags": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "Tags for categorization (e.g., 'project-x', 'monthly')"
-                    },
-                    "resolution": {
-                        "type": "string",
-                        "enum": ["LOW", "MEDIUM", "HIGH", "VERY_HIGH"],
-                        "description": "Preferred resolution"
-                    },
-                    "max_cloud_cover": {
-                        "type": "number",
-                        "minimum": 0,
-                        "maximum": 100,
-                        "description": "Maximum acceptable cloud cover percentage"
-                    }
-                },
-                "required": ["name", "aoi", "from_date", "to_date"]
-            }
-        ),
-        Tool(
-            name="skyfi_list_saved_searches",
-            description="List all saved searches",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "tags": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "Filter by tags"
-                    },
-                    "sort_by": {
-                        "type": "string",
-                        "enum": ["created_at", "last_used", "use_count", "name"],
-                        "default": "created_at",
-                        "description": "Sort order"
-                    }
-                },
-                "required": []
-            }
-        ),
-        Tool(
-            name="skyfi_run_saved_search",
-            description="Run a previously saved search by name or ID",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "search_name": {
-                        "type": "string",
-                        "description": "Name or ID of the saved search"
-                    },
-                    "override_dates": {
-                        "type": "boolean",
-                        "default": False,
-                        "description": "Use current dates instead of saved dates"
-                    }
-                },
-                "required": ["search_name"]
             }
         ),
         Tool(
@@ -423,33 +317,9 @@ async def register_skyfi_tools() -> List[Tool]:
                 "required": ["archive_ids", "area_km2"]
             }
         ),
-        Tool(
-            name="skyfi_authenticate",
-            description="Generate a secure authentication link for setting up your SkyFi API key. Use this instead of typing your API key in chat.",
-            inputSchema={
-                "type": "object",
-                "properties": {}
-            }
-        ),
-        Tool(
-            name="skyfi_check_auth",
-            description="Check current authentication status",
-            inputSchema={
-                "type": "object",
-                "properties": {}
-            }
-        ),
     ]
     
-    # Add budget tools
-    from .budget_tools import register_budget_tools
-    budget_tools = await register_budget_tools()
-    tools.extend(budget_tools)
-    
-    # Add account tools
-    from .account_tools import register_account_tools
-    account_tools = await register_account_tools()
-    tools.extend(account_tools)
+    # Budget and account tools removed - configuration should be set via environment variables
     
     # Add tasking tools
     from .tasking_tools import register_tasking_tools, register_monitoring_tools
@@ -458,5 +328,10 @@ async def register_skyfi_tools() -> List[Tool]:
     
     monitoring_tools = await register_monitoring_tools()
     tools.extend(monitoring_tools)
+    
+    # Add new search tools
+    from .search_tools import register_search_tools
+    search_tools = register_search_tools()
+    tools.extend(search_tools)
     
     return tools

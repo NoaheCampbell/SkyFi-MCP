@@ -29,10 +29,6 @@ async def handle_tasking_tool(name: str, arguments: Dict[str, Any]) -> List[Text
             return await create_tasking_order(arguments)
         elif name == "skyfi_get_order_status":
             return await get_order_status(arguments)
-        elif name == "skyfi_calculate_archive_pricing":
-            return await calculate_archive_pricing(arguments)
-        elif name == "skyfi_estimate_tasking_cost":
-            return await estimate_tasking_cost(arguments)
         elif name == "skyfi_analyze_capture_feasibility":
             return await analyze_capture_feasibility(arguments)
         elif name == "skyfi_predict_satellite_passes":
@@ -308,7 +304,7 @@ async def get_order_status(arguments: Dict[str, Any]) -> List[TextContent]:
     return [TextContent(type="text", text=text)]
 
 
-async def calculate_archive_pricing(arguments: Dict[str, Any]) -> List[TextContent]:
+async def _removed_calculate_archive_pricing(arguments: Dict[str, Any]) -> List[TextContent]:
     """Calculate detailed archive pricing."""
     archive_id = arguments["archive_id"]
     aoi = arguments.get("aoi")
@@ -396,7 +392,7 @@ async def calculate_archive_pricing(arguments: Dict[str, Any]) -> List[TextConte
             )]
 
 
-async def estimate_tasking_cost(arguments: Dict[str, Any]) -> List[TextContent]:
+async def _removed_estimate_tasking_cost(arguments: Dict[str, Any]) -> List[TextContent]:
     """Provide quick tasking cost estimate."""
     area_km2 = arguments["area_km2"]
     resolution = arguments["resolution"]

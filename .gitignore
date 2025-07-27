@@ -55,6 +55,9 @@ htmlcov/
 .mypy_cache/
 .dmypy.json
 dmypy.json
+test_*.py
+*_test_report*.json
+mcp_tools_test_summary.md
 
 # OS
 .DS_Store

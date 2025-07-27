@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "skyfi-docker": {
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "-e", "SKYFI_API_KEY=YOUR_SKYFI_API_KEY_HERE",
+        "-e", "WEATHER_API_KEY=YOUR_OPENWEATHERMAP_API_KEY_HERE",
+        "-e", "SKYFI_COST_LIMIT=40.0",
+        "-e", "SKYFI_FORCE_LOWEST_COST=true",
+        "skyfi-mcp-test",
+        "python", "-m", "mcp_skyfi"
+      ],
+      "transport": "stdio"
+    }
+  }
+}

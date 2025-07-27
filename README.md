@@ -2,17 +2,20 @@
 
 A Model Context Protocol (MCP) server that provides access to SkyFi's satellite imagery API through Claude Desktop, Cursor, and other MCP-compatible clients.
 
+**29 tools** for satellite imagery search, ordering, tasking, monitoring, and geographic operations.
+
 ## Features
 
 - 🛰️ **Satellite Image Search** - Search for satellite imagery with natural language dates
-- 💰 **Smart Budget Management** - Built-in cost controls and spending alerts
-- 🔐 **Secure Authentication** - Web-based auth flow (no API keys in chat)
+- 💰 **Cost Controls** - Built-in spending limits and cost tracking
 - 📊 **Order Management** - Track and download your satellite image orders
 - 🌍 **Multi-Location Search** - Search multiple areas simultaneously
-- 💾 **Saved Searches** - Save and reuse common search configurations
 - 📈 **Order History Export** - Export orders to CSV, JSON, HTML, or Markdown
-- 🎯 **Accurate Cost Estimation** - Precise pricing calculations with area-based billing
+- 🎯 **Satellite Tasking** - Request new satellite captures for specific areas
+- 📡 **Area Monitoring** - Set up webhooks to monitor areas for new imagery
 - 🗺️ **OpenStreetMap Integration** - Convert locations to polygons for searches
+- 🐳 **Docker Support** - Easy deployment with Docker containers
+- 🌤️ **Weather Integration** - Get weather data for capture planning
 
 ## Quick Start
 
@@ -37,7 +40,9 @@ pip install -e .
 3. Set up your environment:
 ```bash
 cp .env.example .env
-# Edit .env and add your SKYFI_API_KEY
+# Edit .env and add your API keys:
+# - SKYFI_API_KEY: Your SkyFi API key (required)
+# - WEATHER_API_KEY: Your OpenWeatherMap API key (optional, for weather features)
 ```
 
 ### Testing the Server
@@ -62,6 +67,7 @@ Add this to your Claude Desktop configuration file:
       "args": ["-m", "mcp_skyfi"],
       "env": {
         "SKYFI_API_KEY": "YOUR_SKYFI_API_KEY_HERE",
+        "WEATHER_API_KEY": "YOUR_OPENWEATHERMAP_API_KEY_HERE",
         "SKYFI_COST_LIMIT": "40.0",
         "SKYFI_FORCE_LOWEST_COST": "true"
       }
@@ -79,6 +85,7 @@ Add this to your Claude Desktop configuration file:
       "args": ["-m", "mcp_skyfi"],
       "env": {
         "SKYFI_API_KEY": "YOUR_SKYFI_API_KEY_HERE",
+        "WEATHER_API_KEY": "YOUR_OPENWEATHERMAP_API_KEY_HERE",
         "SKYFI_COST_LIMIT": "40.0",
         "SKYFI_FORCE_LOWEST_COST": "true"
       }
@@ -88,6 +95,44 @@ Add this to your Claude Desktop configuration file:
 ```
 
 Restart Claude Desktop after updating the configuration.
+
+## Docker Setup
+
+You can also run the MCP server using Docker:
+
+1. Build the Docker image:
+```bash
+docker build -t skyfi-mcp .
+```
+
+2. Run the container:
+```bash
+docker run -d \
+  --name skyfi-mcp \
+  -e SKYFI_API_KEY="YOUR_SKYFI_API_KEY" \
+  -e WEATHER_API_KEY="YOUR_OPENWEATHERMAP_API_KEY" \
+  -p 8765:8765 \
+  skyfi-mcp
+```
+
+3. Update Claude Desktop config for Docker:
+```json
+{
+  "mcpServers": {
+    "skyfi-mcp-docker": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "--name", "skyfi-mcp-test",
+        "-e", "SKYFI_API_KEY=YOUR_API_KEY",
+        "-e", "WEATHER_API_KEY=YOUR_WEATHER_KEY",
+        "skyfi-mcp",
+        "python", "-m", "mcp_skyfi"
+      ]
+    }
+  }
+}
+```
 
 ## Available Tools
 
@@ -101,13 +146,26 @@ Example:
 Search for satellite images of Central Park from the last month
 ```
 
-#### `skyfi_order_archive`
-Order satellite imagery with delivery to your cloud storage.
+#### `skyfi_prepare_order` / `skyfi_confirm_order`
+Two-step ordering process with safety checks:
+1. Prepare an order to get pricing and confirmation token
+2. Confirm the order with the token to complete purchase
+
+#### `skyfi_list_orders`
+List your recent satellite image orders.
+
+#### `skyfi_download_order`
+Download a completed order.
+
+#### `skyfi_export_order_history`
+Export your order history to various formats.
 
 #### `skyfi_get_user`
 Get your account information and available credits.
 
 ### Weather Tools
+
+**Note:** Weather tools require an OpenWeatherMap API key. Get one free at [openweathermap.org](https://openweathermap.org/api).
 
 #### `weather_current`
 Get current weather conditions for any location.
@@ -119,6 +177,36 @@ What's the weather in San Francisco?
 
 #### `weather_forecast`
 Get weather forecast for the next few days.
+
+Example:
+```
+What's the weather forecast for New York for the next 3 days?
+```
+
+### Satellite Tasking Tools
+
+#### `skyfi_get_tasking_quote`
+Get a quote for tasking a satellite to capture new imagery.
+
+#### `skyfi_create_tasking_order`
+Place an order for new satellite imagery capture.
+
+#### `skyfi_analyze_capture_feasibility`
+Analyze the feasibility of capturing imagery for an area.
+
+#### `skyfi_predict_satellite_passes`
+Predict when satellites will pass over an area.
+
+### Monitoring Tools
+
+#### `skyfi_create_webhook_subscription`
+Set up webhooks to monitor for new imagery.
+
+#### `skyfi_setup_area_monitoring`
+Monitor specific areas for new satellite captures.
+
+#### `skyfi_get_notification_status`
+Check the status of your monitoring subscriptions.
 
 ### OpenStreetMap Tools
 
@@ -140,6 +228,12 @@ Example:
 ```
 Get the boundary polygon for Manhattan
 ```
+
+#### `osm_generate_aoi`
+Generate area of interest polygons (circles, squares, etc.) around a point.
+
+#### `osm_calculate_distance`
+Calculate distances between geographic points.
 
 ## Example Workflows
 
@@ -173,6 +267,9 @@ Get the boundary polygon for Manhattan
 
 - `SKYFI_API_KEY` (required): Your SkyFi API key
 - `SKYFI_API_URL`: Override the API endpoint (default: https://app.skyfi.com/platform-api)
+- `SKYFI_COST_LIMIT`: Maximum spending limit (default: 40.0)
+- `SKYFI_FORCE_LOWEST_COST`: Always select lowest cost option (default: true)
+- `WEATHER_API_KEY`: OpenWeatherMap API key for weather features
 - `MCP_LOG_LEVEL`: Logging level (default: INFO)
 
 ### Using with Other Clients

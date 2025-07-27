@@ -116,60 +116,6 @@ async def register_tasking_tools() -> List[Tool]:
             }
         ),
         Tool(
-            name="skyfi_calculate_archive_pricing",
-            description=(
-                "Calculate detailed pricing for archive satellite imagery orders. "
-                "Returns price breakdown including area size, resolution multipliers, and any discounts."
-            ),
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "archive_id": {
-                        "type": "string",
-                        "description": "Archive image ID"
-                    },
-                    "aoi": {
-                        "type": "string",
-                        "description": "Area of interest as WKT polygon (optional, uses full image if not provided)"
-                    },
-                    "delivery_format": {
-                        "type": "string",
-                        "description": "Delivery format: 'geotiff', 'cog', 'jpeg2000'",
-                        "default": "geotiff"
-                    }
-                },
-                "required": ["archive_id"]
-            }
-        ),
-        Tool(
-            name="skyfi_estimate_tasking_cost",
-            description=(
-                "Estimate costs for new satellite imagery tasking orders. "
-                "Provides rough estimates before getting formal quote."
-            ),
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "area_km2": {
-                        "type": "number",
-                        "description": "Area size in square kilometers"
-                    },
-                    "resolution": {
-                        "type": "string",
-                        "description": "Required resolution category",
-                        "enum": ["high", "medium", "low"]
-                    },
-                    "priority": {
-                        "type": "string",
-                        "description": "Tasking priority level",
-                        "enum": ["standard", "priority", "urgent"],
-                        "default": "standard"
-                    }
-                },
-                "required": ["area_km2", "resolution"]
-            }
-        ),
-        Tool(
             name="skyfi_analyze_capture_feasibility",
             description=(
                 "Analyze the feasibility of satellite imagery capture for a specific area and time period. "

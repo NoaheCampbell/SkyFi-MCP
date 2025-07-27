@@ -51,6 +51,18 @@ class CostTracker:
         """Get total amount spent."""
         return self.orders["total_spent"]
     
+    def get_daily_spent(self) -> float:
+        """Get amount spent today."""
+        today = datetime.now().date().isoformat()
+        daily_total = 0.0
+        
+        for order in self.orders.get("orders", []):
+            order_date = datetime.fromisoformat(order["timestamp"]).date().isoformat()
+            if order_date == today:
+                daily_total += order["cost"]
+        
+        return daily_total
+    
     def get_remaining_budget(self, limit: float) -> float:
         """Get remaining budget."""
         return max(0, limit - self.get_total_spent())
@@ -58,6 +70,22 @@ class CostTracker:
     def can_afford(self, cost: float, limit: float) -> bool:
         """Check if order is within budget."""
         return self.get_total_spent() + cost <= limit
+    
+    def add_cost(self, cost: float, order_type: str, details: Dict):
+        """Add a cost entry (generic method for any order type)."""
+        order = {
+            "order_type": order_type,
+            "cost": cost,
+            "timestamp": datetime.now().isoformat(),
+            "details": details
+        }
+        
+        self.orders["orders"].append(order)
+        self.orders["total_spent"] += cost
+        self._save_orders()
+        
+        logger.info(f"Added cost: {order_type} for ${cost:.2f}")
+        logger.info(f"Total spent: ${self.get_total_spent():.2f}")
     
     def record_order(self, archive_id: str, cost: float, details: Dict):
         """Record a completed order."""

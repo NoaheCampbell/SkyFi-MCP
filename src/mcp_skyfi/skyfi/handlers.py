@@ -40,14 +40,62 @@ async def handle_skyfi_tool(name: str, arguments: Dict[str, Any]) -> List[TextCo
                     from_date_iso = from_date_str
                     to_date_iso = to_date_str
                 
-                result = await client.search_archives(
-                    aoi=arguments["aoi"],
-                    from_date=from_date_iso,
-                    to_date=to_date_iso,
-                    open_data=arguments.get("openData", True),
-                    product_types=arguments.get("productTypes"),
-                    resolution=arguments.get("resolution"),
-                )
+                try:
+                    result = await client.search_archives(
+                        aoi=arguments["aoi"],
+                        from_date=from_date_iso,
+                        to_date=to_date_iso,
+                        open_data=arguments.get("openData", True),
+                        product_types=arguments.get("productTypes"),
+                        resolution=arguments.get("resolution"),
+                    )
+                except Exception as e:
+                    error_str = str(e)
+                    if "422" in error_str or "Unprocessable Entity" in error_str:
+                        # Import smart search utilities
+                        from .smart_search import suggest_search_improvements
+                        from ..utils.area_calculator import calculate_wkt_area_km2
+                        
+                        # Check if this looks like a user-provided exact polygon
+                        aoi = arguments.get("aoi", "")
+                        is_user_exact = False
+                        
+                        # Simple heuristic: if polygon has regular pattern or exact coordinates, assume user-provided
+                        if aoi.count(".") > 10:  # Many decimal points suggests exact coords
+                            is_user_exact = True
+                        
+                        # Provide helpful error message
+                        text = "❌ **Search Failed: Polygon Too Complex**\n\n"
+                        if is_user_exact:
+                            text += "Your exact polygon exceeds the SkyFi API limits.\n\n"
+                        else:
+                            text += "The SkyFi API cannot process complex polygons with many points.\n\n"
+                        
+                        # Try to analyze the polygon
+                        try:
+                            from ..utils.polygon_simplifier import parse_wkt_polygon
+                            coords = parse_wkt_polygon(arguments["aoi"])
+                            area = calculate_wkt_area_km2(arguments["aoi"])
+                            text += f"Your polygon has {len(coords)} points and covers {area:.1f} km²\n\n"
+                        except:
+                            pass
+                        
+                        text += "**Solutions:**\n\n"
+                        text += "1. **Use osm_generate_aoi** to create a simple shape:\n"
+                        text += "   • Get center coordinates with `osm_geocode`\n"
+                        text += "   • Create a square/rectangle with `osm_generate_aoi`\n\n"
+                        text += "2. **Create a simple bounding box manually:**\n"
+                        text += "   • Example for Central Park:\n"
+                        text += "   ```\n"
+                        text += "   POLYGON((-73.982 40.764, -73.949 40.764, -73.949 40.801, -73.982 40.801, -73.982 40.764))\n"
+                        text += "   ```\n\n"
+                        text += "3. **Use landmark search** (if searching for a known place):\n"
+                        text += "   • Many landmarks have pre-defined simple boundaries\n\n"
+                        text += suggest_search_improvements(arguments["aoi"], error_str)
+                        
+                        return [TextContent(type="text", text=text)]
+                    else:
+                        raise
                 
                 # Format results with previews
                 if "results" in result:
@@ -129,134 +177,6 @@ async def handle_skyfi_tool(name: str, arguments: Dict[str, Any]) -> List[TextCo
                         text=f"❌ Order blocked: {str(e)}"
                     )]
             
-            elif name == "skyfi_get_pricing":
-                # Get pricing options for tasking
-                aoi = arguments.get("aoi")
-                show_all = arguments.get("show_all", True)  # Default to showing all prices
-                
-                try:
-                    result = await client.get_pricing_options(aoi)
-                    
-                    # Parse the pricing response
-                    price_info = "💰 SkyFi Satellite Tasking Price List\n"
-                    price_info += f"{'=' * 40}\n\n"
-                    
-                    if aoi:
-                        price_info += f"📍 Pricing for specific area\n\n"
-                    else:
-                        price_info += "📋 General pricing catalog\n\n"
-                    
-                    # Show budget status
-                    total_spent = client.cost_tracker.get_total_spent()
-                    remaining = client.cost_tracker.get_remaining_budget(client.config.cost_limit)
-                    
-                    price_info += "📊 Budget Reference:\n"
-                    price_info += f"- Current spending: ${total_spent:.2f}\n"
-                    price_info += f"- Budget remaining: ${remaining:.2f}\n"
-                    price_info += f"- Budget limit: ${client.config.cost_limit:.2f}\n\n"
-                    
-                    # Format the pricing data - show ALL options
-                    price_info += "🛰️ ALL AVAILABLE PRICING OPTIONS:\n"
-                    price_info += "(Showing all prices regardless of budget)\n\n"
-                    
-                    # First, let's see the raw structure to handle it properly
-                    if isinstance(result, dict):
-                        # Count total options
-                        total_options = 0
-                        
-                        # Try different possible response structures
-                        if "providers" in result:
-                            # Structure: {"providers": {...}}
-                            providers_data = result["providers"]
-                        elif "pricing" in result:
-                            # Structure: {"pricing": {...}}
-                            providers_data = result["pricing"]
-                        else:
-                            # Direct provider data
-                            providers_data = result
-                        
-                        # Format each provider's options
-                        for key, value in providers_data.items():
-                            if isinstance(value, dict):
-                                price_info += f"\n📸 Provider: {key.upper()}\n"
-                                price_info += "-" * 30 + "\n"
-                                
-                                # Handle nested options
-                                for option_name, option_data in value.items():
-                                    if isinstance(option_data, dict):
-                                        # Extract price
-                                        price = None
-                                        if "price" in option_data:
-                                            price = option_data["price"]
-                                        elif "cost" in option_data:
-                                            price = option_data["cost"]
-                                        elif "amount" in option_data:
-                                            price = option_data["amount"]
-                                        
-                                        if price is not None:
-                                            total_options += 1
-                                            price_float = float(price)
-                                            price_info += f"  • {option_name}: ${price_float:,.2f}"
-                                            
-                                            # Add indicators
-                                            if price_float == 0:
-                                                price_info += " 🆓 (FREE)"
-                                            elif price_float <= remaining:
-                                                price_info += " ✅ (within budget)"
-                                            else:
-                                                price_info += " ❌ (exceeds budget)"
-                                            
-                                            if price_float > 100:
-                                                price_info += " 💸 (premium)"
-                                            
-                                            # Add other details if available
-                                            if "resolution" in option_data:
-                                                price_info += f" - {option_data['resolution']}"
-                                            if "delivery_time" in option_data:
-                                                price_info += f" - {option_data['delivery_time']}"
-                                            
-                                            price_info += "\n"
-                                    elif isinstance(option_data, (int, float)):
-                                        # Direct price value
-                                        total_options += 1
-                                        price_float = float(option_data)
-                                        price_info += f"  • {option_name}: ${price_float:,.2f}"
-                                        
-                                        if price_float == 0:
-                                            price_info += " 🆓 (FREE)"
-                                        elif price_float <= remaining:
-                                            price_info += " ✅"
-                                        else:
-                                            price_info += " ❌"
-                                        
-                                        price_info += "\n"
-                        
-                        if total_options == 0:
-                            # If we couldn't parse it, show raw data
-                            price_info += "\nRaw pricing data (unable to parse standard format):\n"
-                            price_info += json.dumps(result, indent=2)[:2000]  # Limit output
-                            if len(json.dumps(result)) > 2000:
-                                price_info += "\n... (truncated)"
-                        else:
-                            price_info += f"\n📊 Total options available: {total_options}"
-                    else:
-                        # Non-dict response
-                        price_info += "Unexpected response format:\n"
-                        price_info += str(result)[:1000]
-                    
-                    price_info += "\n\n⚠️ IMPORTANT REMINDERS:\n"
-                    price_info += "• These are viewing prices only - NO orders can be placed\n"
-                    price_info += "• Ordering capability has been completely REMOVED for safety\n"
-                    price_info += "• Prices shown are for reference only\n"
-                    
-                    return [TextContent(type="text", text=price_info)]
-                    
-                except Exception as e:
-                    logger.error(f"Error getting pricing: {e}")
-                    return [TextContent(
-                        type="text",
-                        text=f"Error getting pricing: {str(e)}\n\nTry without an AOI for general pricing."
-                    )]
             
             elif name == "skyfi_prepare_order":
                 # Check if ordering is enabled at all
@@ -485,15 +405,6 @@ async def handle_skyfi_tool(name: str, arguments: Dict[str, Any]) -> List[TextCo
                         text=f"❌ Order failed: {str(e)}"
                     )]
             
-            elif name.startswith("skyfi_request_budget_") or name.startswith("skyfi_confirm_budget_") or name == "skyfi_view_current_budget":
-                # Handle budget tools
-                from .budget_tools import call_budget_tool
-                return await call_budget_tool(name, arguments)
-            
-            elif name == "skyfi_update_account_budget":
-                # Handle account tools
-                from .account_tools import call_account_tool
-                return await call_account_tool(name, arguments)
             
             elif name == "skyfi_spending_report":
                 total_spent = client.cost_tracker.get_total_spent()
@@ -597,73 +508,6 @@ async def handle_skyfi_tool(name: str, arguments: Dict[str, Any]) -> List[TextCo
                         text=f"❌ Error listing orders: {str(e)}"
                     )]
             
-            elif name == "skyfi_get_download_url":
-                order_id = arguments["order_id"]
-                deliverable_type = arguments.get("deliverable_type", "image")
-                
-                try:
-                    download_url = await client.get_download_url(order_id, deliverable_type)
-                    
-                    # Try to download directly instead of showing curl command
-                    try:
-                        file_path = await client.download_order(order_id, deliverable_type)
-                        
-                        # Get file size for preview
-                        import os
-                        file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
-                        
-                        preview_text = f"✅ Successfully downloaded order {order_id}\n\n"
-                        preview_text += "📦 Download Complete\n"
-                        preview_text += "┌────────────────────────────────────┐\n"
-                        preview_text += f"│ 🖼️  {deliverable_type.upper():<29} │\n"
-                        preview_text += f"│ 📏 Size: {file_size_mb:.1f} MB{' ' * (22 - len(f'{file_size_mb:.1f} MB'))} │\n"
-                        preview_text += f"│ 📁 Saved to temp directory         │\n"
-                        preview_text += "│                                    │\n"
-                        preview_text += "│    ╔═══════════════════╗          │\n"
-                        preview_text += "│    ║ 🛰️             🌍 ║          │\n"
-                        preview_text += "│    ║                   ║          │\n"
-                        preview_text += "│    ║   Satellite       ║          │\n"
-                        preview_text += "│    ║     Image         ║          │\n"
-                        preview_text += "│    ║                   ║          │\n"
-                        preview_text += "│    ╚═══════════════════╝          │\n"
-                        preview_text += "└────────────────────────────────────┘\n\n"
-                        preview_text += f"📍 Location: {file_path}\n\n"
-                        preview_text += "💡 Tip: You can open this file with any image viewer"
-                        
-                        return [TextContent(
-                            type="text",
-                            text=preview_text
-                        )]
-                    except Exception as download_error:
-                        # If download fails, provide the URL and instructions
-                        extensions = {
-                            "image": "png",
-                            "payload": "zip",
-                            "tiles": "zip"
-                        }
-                        ext = extensions.get(deliverable_type, "dat")
-                        
-                        return [TextContent(
-                            type="text",
-                            text=(
-                                f"📥 Order {order_id} - Download Information\n\n"
-                                f"Type: {deliverable_type}\n"
-                                f"Expected format: .{ext}\n\n"
-                                f"⚠️ Could not download automatically: {str(download_error)}\n\n"
-                                "To download manually, use this curl command:\n\n"
-                                f"```bash\n"
-                                f"curl -L -X GET \"{download_url}\" \\\n"
-                                f"  -H \"X-Skyfi-Api-Key: {client.config.api_key}\" \\\n"
-                                f"  --output skyfi-order-{order_id}.{ext}\n"
-                                f"```"
-                            )
-                        )]
-                except Exception as e:
-                    return [TextContent(
-                        type="text",
-                        text=f"❌ Failed to get download URL: {str(e)}\n\nThe order may still be processing."
-                    )]
-            
             elif name == "skyfi_download_order":
                 order_id = arguments["order_id"]
                 deliverable_type = arguments.get("deliverable_type", "image")
@@ -687,81 +531,6 @@ async def handle_skyfi_tool(name: str, arguments: Dict[str, Any]) -> List[TextCo
                         text=f"❌ Failed to download order: {str(e)}\n\nThe order may still be processing or there may be an authentication issue."
                     )]
             
-            elif name == "skyfi_save_search":
-                # Save search configuration
-                from ..utils.saved_searches import SavedSearchManager
-                manager = SavedSearchManager()
-                
-                search_id = manager.save_search(
-                    name=arguments["name"],
-                    aoi=arguments["aoi"],
-                    from_date=arguments["from_date"],
-                    to_date=arguments["to_date"],
-                    description=arguments.get("description"),
-                    tags=arguments.get("tags"),
-                    resolution=arguments.get("resolution"),
-                    max_cloud_cover=arguments.get("max_cloud_cover")
-                )
-                
-                return [TextContent(
-                    type="text",
-                    text=f"✅ Search saved as '{arguments['name']}'\n\nSearch ID: {search_id}\n\nUse 'skyfi_run_saved_search' to run it anytime."
-                )]
-            
-            elif name == "skyfi_list_saved_searches":
-                # List saved searches
-                from ..utils.saved_searches import SavedSearchManager
-                manager = SavedSearchManager()
-                
-                searches = manager.list_searches(
-                    tags=arguments.get("tags"),
-                    sort_by=arguments.get("sort_by", "created_at")
-                )
-                
-                text = manager.format_search_list(searches)
-                return [TextContent(type="text", text=text)]
-            
-            elif name == "skyfi_run_saved_search":
-                # Run saved search
-                from ..utils.saved_searches import SavedSearchManager
-                manager = SavedSearchManager()
-                
-                search = manager.get_search(arguments["search_name"])
-                if not search:
-                    return [TextContent(
-                        type="text",
-                        text=f"❌ Saved search '{arguments['search_name']}' not found.\n\nUse 'skyfi_list_saved_searches' to see available searches."
-                    )]
-                
-                # Run the search with saved parameters
-                from_date = search["from_date"]
-                to_date = search["to_date"]
-                
-                # Override dates if requested
-                if arguments.get("override_dates"):
-                    from_date = "last month"
-                    to_date = "today"
-                
-                # Parse dates
-                from ..utils.date_parser import parse_date_range, format_date_for_api
-                from_date_parsed, to_date_parsed = parse_date_range(from_date, to_date)
-                
-                result = await client.search_archives(
-                    aoi=search["aoi"],
-                    from_date=format_date_for_api(from_date_parsed),
-                    to_date=format_date_for_api(to_date_parsed),
-                    resolution=search.get("resolution"),
-                    product_types=search.get("product_types")
-                )
-                
-                # Format results
-                from ..utils.preview_generator import format_search_results_with_previews
-                text = f"🔄 Running saved search: {search['name']}\n"
-                if search.get("description"):
-                    text += f"📝 {search['description']}\n"
-                text += f"\n{format_search_results_with_previews(result.get('results', []), area_km2=search.get('area_km2'))}"
-                
-                return [TextContent(type="text", text=text)]
             
             elif name == "skyfi_multi_location_search":
                 # Multi-location search
@@ -847,76 +616,7 @@ async def handle_skyfi_tool(name: str, arguments: Dict[str, Any]) -> List[TextCo
                 
                 return [TextContent(type="text", text=text)]
             
-            elif name == "skyfi_estimate_cost":
-                # Get accurate cost estimate
-                from ..utils.cost_estimator import CostEstimator
-                
-                # Find the archive in recent searches
-                # For now, create a basic archive object
-                archive = {"archiveId": arguments["archive_id"], "price": 1.0}  # Default price
-                
-                estimator = CostEstimator()
-                cost_info = estimator.estimate_order_cost(
-                    archive=archive,
-                    area_km2=arguments["area_km2"],
-                    include_fees=arguments.get("include_fees", True)
-                )
-                
-                text = f"💰 Cost Estimate for {arguments['archive_id']}\n"
-                text += "━" * 40 + "\n\n"
-                text += cost_info["breakdown_text"] + "\n\n"
-                
-                if cost_info["notes"]:
-                    text += "📝 Notes:\n"
-                    for note in cost_info["notes"]:
-                        text += f"  • {note}\n"
-                
-                return [TextContent(type="text", text=text)]
             
-            elif name == "skyfi_compare_costs":
-                # Compare costs across archives
-                from ..utils.cost_estimator import CostEstimator
-                
-                # For demo, create basic archive objects
-                archives = [
-                    {"archiveId": aid, "satellite": "Demo", "price": 1.0}
-                    for aid in arguments["archive_ids"]
-                ]
-                
-                estimator = CostEstimator()
-                comparison = estimator.format_cost_comparison(
-                    archives=archives,
-                    area_km2=arguments["area_km2"]
-                )
-                
-                return [TextContent(type="text", text=comparison)]
-            
-            elif name == "skyfi_authenticate":
-                # Generate secure authentication link
-                from ..auth.nonce_auth import nonce_auth
-                
-                # Get session ID (this would come from MCP context in production)
-                import uuid
-                session_id = str(uuid.uuid4())
-                
-                # Generate auth session
-                nonce, auth_url = nonce_auth.generate_auth_session(session_id)
-                
-                return [TextContent(
-                    type="text",
-                    text=(
-                        "🔐 Secure Authentication Setup\n"
-                        "━" * 40 + "\n\n"
-                        "Please visit this secure link to enter your SkyFi API key:\n\n"
-                        f"🔗 {auth_url}\n\n"
-                        "This link will:\n"
-                        "✅ Use HTTPS encryption\n"
-                        "✅ Expire in 5 minutes\n"
-                        "✅ Only work once\n"
-                        "✅ Never expose your key in chat\n\n"
-                        "After authenticating, close the browser and return here."
-                    )
-                )]
             
             elif name == "skyfi_set_api_key":
                 # Set API key at runtime
@@ -953,61 +653,127 @@ async def handle_skyfi_tool(name: str, arguments: Dict[str, Any]) -> List[TextCo
                         text=f"❌ Failed to set API key: {str(e)}\n\nPlease check your API key and try again."
                     )]
             
-            elif name == "skyfi_check_auth":
-                # Check authentication status
-                from ..auth import auth_manager
-                from ..auth.nonce_auth import nonce_auth
-                
-                # Try to get session ID from context
-                import uuid
-                session_id = str(uuid.uuid4())  # In production, this would come from MCP context
-                
-                # Check nonce-based auth first
-                api_key = nonce_auth.get_api_key_for_session(session_id)
-                if api_key:
-                    auth_manager.set_api_key(api_key)
-                
-                has_key = auth_manager.get_api_key() is not None
-                key_source = "Not configured"
-                
-                if has_key:
-                    # Determine source
-                    if nonce_auth.get_api_key_for_session(session_id):
-                        key_source = "Web authentication"
-                    elif os.environ.get("SKYFI_API_KEY"):
-                        key_source = "Environment variable"
-                    elif auth_manager.get_api_key():
-                        key_source = "Runtime configuration"
-                
-                text = "🔐 Authentication Status\n"
-                text += "━" * 40 + "\n\n"
-                
-                if has_key:
-                    text += "✅ API key is configured\n"
-                    text += f"Source: {key_source}\n\n"
-                else:
-                    text += "❌ No API key configured\n\n"
-                    text += "To authenticate securely:\n\n"
-                    text += "Use the `skyfi_authenticate` tool to get a secure link.\n"
-                    text += "This lets you enter your API key via a secure web page\n"
-                    text += "instead of typing it in chat.\n\n"
-                    text += "Example: \"Set up my SkyFi authentication\""
-                
-                return [TextContent(type="text", text=text)]
             
             else:
                 # Try tasking tools
                 from .tasking_handlers import handle_tasking_tool
                 tasking_tools = [
                     "skyfi_get_tasking_quote", "skyfi_create_tasking_order",
-                    "skyfi_get_order_status", "skyfi_calculate_archive_pricing",
-                    "skyfi_estimate_tasking_cost", "skyfi_analyze_capture_feasibility",
+                    "skyfi_get_order_status", "skyfi_analyze_capture_feasibility",
                     "skyfi_predict_satellite_passes", "skyfi_create_webhook_subscription",
                     "skyfi_setup_area_monitoring", "skyfi_get_notification_status"
                 ]
                 
                 if name in tasking_tools:
                     return await handle_tasking_tool(name, arguments)
+                
+                # Check for new search tools
+                search_tools = ["skyfi_search_exact", "skyfi_search_bbox"]
+                if name in search_tools:
+                    # Handle here since they need the client
+                    if name == "skyfi_search_exact":
+                        # Search with exact polygon - no automatic simplification
+                        from_date_str = arguments["fromDate"]
+                        to_date_str = arguments["toDate"]
+                        polygon = arguments["polygon"]
+                        simplify_if_needed = arguments.get("simplify_if_needed", False)
+                        
+                        # Parse dates
+                        try:
+                            from ..utils.date_parser import parse_date_range, format_date_for_api
+                            from_date, to_date = parse_date_range(from_date_str, to_date_str)
+                            from_date_iso = format_date_for_api(from_date)
+                            to_date_iso = format_date_for_api(to_date)
+                        except Exception as e:
+                            from_date_iso = from_date_str
+                            to_date_iso = to_date_str
+                        
+                        # Try search with exact polygon
+                        try:
+                            result = await client.search_archives(
+                                aoi=polygon,
+                                from_date=from_date_iso,
+                                to_date=to_date_iso,
+                                resolution=arguments.get("resolution", "LOW"),
+                            )
+                            
+                            # Format results
+                            if "results" in result:
+                                from ..utils.preview_generator import format_search_results_with_previews
+                                text = "✅ **Search succeeded with exact polygon**\n\n"
+                                text += format_search_results_with_previews(result['results'], max_results=5)
+                            else:
+                                text = json.dumps(result, indent=2)
+                            
+                            return [TextContent(type="text", text=text)]
+                            
+                        except Exception as e:
+                            if "422" in str(e) and simplify_if_needed:
+                                # Try to simplify
+                                from ..utils.polygon_simplifier import adaptive_simplify_wkt
+                                simplified = adaptive_simplify_wkt(polygon, max_bytes=1500)
+                                
+                                # Retry with simplified
+                                result = await client.search_archives(
+                                    aoi=simplified,
+                                    from_date=from_date_iso,
+                                    to_date=to_date_iso,
+                                    resolution=arguments.get("resolution", "LOW"),
+                                )
+                                
+                                text = "⚠️ **Polygon was simplified to meet API limits**\n\n"
+                                if "results" in result:
+                                    from ..utils.preview_generator import format_search_results_with_previews
+                                    text += format_search_results_with_previews(result['results'], max_results=5)
+                                else:
+                                    text = json.dumps(result, indent=2)
+                                
+                                return [TextContent(type="text", text=text)]
+                            else:
+                                raise
+                                
+                    elif name == "skyfi_search_bbox":
+                        # Search with simple bounding box
+                        min_lon = arguments["min_lon"]
+                        min_lat = arguments["min_lat"]
+                        max_lon = arguments["max_lon"]
+                        max_lat = arguments["max_lat"]
+                        
+                        # Create WKT polygon
+                        wkt = f"POLYGON(({min_lon} {min_lat}, {max_lon} {min_lat}, {max_lon} {max_lat}, {min_lon} {max_lat}, {min_lon} {min_lat}))"
+                        
+                        # Parse dates
+                        from_date_str = arguments["fromDate"]
+                        to_date_str = arguments["toDate"]
+                        try:
+                            from ..utils.date_parser import parse_date_range, format_date_for_api
+                            from_date, to_date = parse_date_range(from_date_str, to_date_str)
+                            from_date_iso = format_date_for_api(from_date)
+                            to_date_iso = format_date_for_api(to_date)
+                        except Exception as e:
+                            from_date_iso = from_date_str
+                            to_date_iso = to_date_str
+                        
+                        result = await client.search_archives(
+                            aoi=wkt,
+                            from_date=from_date_iso,
+                            to_date=to_date_iso,
+                            resolution=arguments.get("resolution", "LOW"),
+                        )
+                        
+                        # Format results
+                        if "results" in result:
+                            from ..utils.preview_generator import format_search_results_with_previews
+                            from ..utils.area_calculator import calculate_wkt_area_km2
+                            
+                            area = calculate_wkt_area_km2(wkt)
+                            text = f"🔍 **Bounding Box Search**\n"
+                            text += f"Area: {area:.2f} km²\n\n"
+                            text += format_search_results_with_previews(result['results'], max_results=5, area_km2=area)
+                        else:
+                            text = json.dumps(result, indent=2)
+                        
+                        return [TextContent(type="text", text=text)]
                 
                 raise ValueError(f"Unknown SkyFi tool: {name}")
     
