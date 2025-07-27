@@ -382,4 +382,3 @@ MIT License - see LICENSE file for details.
 - SkyFi API Documentation: [docs.skyfi.com](https://docs.skyfi.com)
 - Integration Guide: [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md)
 - Issues: [GitHub Issues](https://github.com/NoaheCampbell/SkyFi-MCP/issues)
-- SkyFi Support: support@skyfi.com

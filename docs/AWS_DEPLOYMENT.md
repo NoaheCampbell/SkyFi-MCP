@@ -8,19 +8,25 @@ When running on AWS, you cannot use environment variables to store API keys sinc
 
 ## Authentication Methods
 
-### 1. Runtime Configuration (Recommended)
+### 1. Environment Variables (Recommended)
 
-The simplest method for cloud deployment:
+Configure your API key through environment variables in the MCP server configuration:
 
-```bash
-# First, check authentication status
-skyfi_check_auth
-
-# Then set your API key
-skyfi_set_api_key api_key="your-skyfi-api-key-here"
+```json
+{
+  "mcpServers": {
+    "skyfi": {
+      "command": "python3",
+      "args": ["-m", "mcp_skyfi"],
+      "env": {
+        "SKYFI_API_KEY": "your-skyfi-api-key-here"
+      }
+    }
+  }
+}
 ```
 
-The key is stored temporarily and persists across tool calls within the same session.
+Note: The `skyfi_check_auth` and `skyfi_set_api_key` tools have been removed. Use environment variables instead.
 
 ### 2. AWS Secrets Manager
 

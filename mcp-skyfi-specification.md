@@ -99,10 +99,10 @@ Search for available satellite imagery in the SkyFi catalog.
 }
 ```
 
-#### `skyfi_order_archive`
-Order satellite imagery from the catalog with delivery to cloud storage.
+#### `skyfi_prepare_order` / `skyfi_confirm_order`
+Two-step ordering process with safety checks for satellite imagery.
 
-**Input Schema:**
+**Step 1 - Prepare Order:**
 ```json
 {
   "type": "object",
@@ -123,9 +123,31 @@ Order satellite imagery from the catalog with delivery to cloud storage.
     "deliveryParams": {
       "type": "object",
       "description": "Provider-specific delivery parameters"
+    },
+    "estimated_cost": {
+      "type": "number",
+      "description": "Estimated cost from search results"
     }
   },
-  "required": ["aoi", "archiveId", "deliveryDriver", "deliveryParams"]
+  "required": ["aoi", "archiveId", "deliveryDriver", "deliveryParams", "estimated_cost"]
+}
+```
+
+**Step 2 - Confirm Order:**
+```json
+{
+  "type": "object",
+  "properties": {
+    "token": {
+      "type": "string",
+      "description": "Token from prepare_order"
+    },
+    "confirmation_code": {
+      "type": "string",
+      "description": "Confirmation code from prepare_order"
+    }
+  },
+  "required": ["token", "confirmation_code"]
 }
 ```
 
