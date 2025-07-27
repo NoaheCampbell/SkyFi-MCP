@@ -93,9 +93,10 @@ class SkyFiClient:
         resolution: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Search for satellite imagery in the catalog."""
-        # Force lowest cost options if configured
-        if self.config.force_lowest_cost:
-            resolution = "LOW"  # Always use lowest resolution
+        # If user explicitly requested a specific resolution, respect it
+        # Only force LOW resolution if no resolution was specified AND force_lowest_cost is true
+        if self.config.force_lowest_cost and resolution is None:
+            resolution = "LOW"  # Default to lowest resolution
             open_data = True    # Prefer open data (usually cheaper/free)
             
         payload = {
@@ -110,9 +111,24 @@ class SkyFiClient:
         if resolution:
             payload["resolution"] = resolution
         
+        # Log the payload for debugging
+        logger.info(f"Search payload - resolution: {resolution}, openData: {open_data}")
+        
         response = await self.client.post("/archives", json=payload)
         response.raise_for_status()
         result = response.json()
+        
+        # Filter results by resolution if specified
+        if resolution and "results" in result:
+            # If user requested a specific resolution, filter to only that resolution
+            original_count = len(result["results"])
+            result["results"] = [
+                r for r in result["results"] 
+                if r.get("resolution", "").upper() == resolution.upper()
+            ]
+            filtered_count = original_count - len(result["results"])
+            if filtered_count > 0:
+                logger.info(f"Filtered out {filtered_count} results that didn't match resolution {resolution}")
         
         # Sort by price if forcing lowest cost
         if self.config.force_lowest_cost and "results" in result:

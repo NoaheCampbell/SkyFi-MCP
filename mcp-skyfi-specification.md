@@ -272,27 +272,6 @@ Convert coordinates to address.
 }
 ```
 
-#### `osm_polygon_to_wkt`
-Convert place name to WKT polygon for use with SkyFi API.
-
-**Input Schema:**
-```json
-{
-  "type": "object",
-  "properties": {
-    "place": {
-      "type": "string",
-      "description": "Place name to get boundary polygon"
-    },
-    "simplify": {
-      "type": "boolean",
-      "default": true,
-      "description": "Simplify polygon for API compatibility"
-    }
-  },
-  "required": ["place"]
-}
-```
 
 ## Configuration
 

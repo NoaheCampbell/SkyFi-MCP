@@ -1,74 +1,43 @@
 # SkyFi MCP User Guide
 
-## Quick Start (2 minutes)
+## What You Can Do
 
-### 1. Get the Server URL
-
-Your administrator will provide you with a URL like:
-- `https://skyfi-mcp.ngrok.io` or
-- `https://abc123.ngrok.io`
-
-### 2. Add to Claude Desktop
-
-Open your Claude Desktop configuration file:
-
-**Mac**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-**Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
-
-Add this configuration (replace the URL with your actual server URL):
-
-```json
-{
-  "mcpServers": {
-    "skyfi": {
-      "transport": "http",
-      "url": "https://skyfi-mcp.ngrok.io"
-    }
-  }
-}
-```
-
-### 3. Restart Claude Desktop
-
-Quit and reopen Claude Desktop to load the new configuration.
-
-### 4. Set Your API Key
-
-In Claude, type:
-
-```
-Set my SkyFi API key to sk-your-actual-api-key-here
-```
-
-You'll see:
-```
-✅ API key set and verified successfully!
-Authenticated as: your@email.com
-Account type: Pro
-```
-
-## That's it! You're ready to use SkyFi 🛰️
+With SkyFi MCP, you can:
+- 🔍 Search for satellite imagery by location and date
+- 💰 Check pricing before ordering
+- 📦 Order and download satellite images
+- 📊 Track your spending and order history
+- 🌤️ Check weather conditions for capture planning
+- 🗺️ Convert addresses to coordinates and create search areas
 
 ## Example Commands
 
 ### Search for Images
 ```
-Search for satellite images of Central Park from last week
+Find satellite images of Central Park from last week
 ```
 
-### Check Your Budget
 ```
-Show my SkyFi spending report
-```
-
-### Save a Search
-```
-Save this search as "Daily Manhattan Check" 
+Show me high resolution images of the Golden Gate Bridge from January 2024
 ```
 
-### Download an Order
+### Check Pricing
 ```
-Show my recent orders and download the completed ones
+How much would it cost to get images of Manhattan?
+```
+
+### Order Images
+```
+Order image ID abc123 from the search results
+```
+
+### Check Orders
+```
+Show my recent satellite image orders
+```
+
+```
+Download my completed orders from today
 ```
 
 ### Multi-Location Search
@@ -76,64 +45,80 @@ Show my recent orders and download the completed ones
 Search for images of Times Square, Central Park, and Brooklyn Bridge from yesterday
 ```
 
-### Export Order History
+### Export Data
 ```
 Export my order history as a CSV file
 ```
 
-## Important Notes
+### Weather Planning
+```
+What's the weather forecast for San Francisco this week?
+```
 
-### 🔐 Security
-- Your API key is only stored in memory during your session
-- You'll need to set it again if you restart Claude Desktop
-- Never share your API key with others
+### Location Tools
+```
+Get coordinates for the Eiffel Tower
+```
 
-### 💰 Costs
-- You're using your own SkyFi account
-- All orders are billed to your account
-- Check prices before ordering: `Show pricing for this area`
+```
+Create a 5km search area around latitude 40.7580, longitude -73.9855
+```
 
-### 🚫 Safety Features
-- Orders require confirmation before purchase
-- Budget limits prevent overspending
-- Low resolution is used by default to save money
+## Cost Controls
+
+The system includes several safety features:
+- **Confirmation Required**: All orders require confirmation before purchase
+- **Spending Limits**: Built-in budget limits prevent overspending  
+- **Cost Estimates**: Always shows pricing before ordering
+- **Low Cost Default**: Automatically selects lowest cost options
+
+## Tips
+
+1. **Use Natural Language**: Just describe what you want in plain English
+2. **Specify Resolution**: Add "high resolution" or "low resolution" to your searches
+3. **Date Ranges**: Use phrases like "last week", "January 2024", or specific dates
+4. **Multiple Locations**: Search several places at once by listing them
+5. **Save Money**: Low resolution images are often free (open data)
+
+## Common Tasks
+
+### Finding Recent Images
+```
+Show me the newest satellite images of [location]
+```
+
+### Checking Coverage
+```
+What satellite images are available for [location] in [time period]?
+```
+
+### Downloading Orders
+```
+List my orders and download the completed ones
+```
+
+### Budget Tracking
+```
+Show my SkyFi spending report for this month
+```
 
 ## Troubleshooting
 
-### "No API key configured"
-You need to set your API key first. See step 4 above.
+### No results found
+- Try a wider date range
+- Use a larger search area
+- Check if the location name is recognized
 
-### "Authentication failed"
-Your API key might be invalid. Check it at https://app.skyfi.com
+### Authentication errors
+- Your API key may have expired
+- Contact your administrator
 
-### Connection errors
-The server might be down. Contact your administrator.
+### Connection issues
+- Check your internet connection
+- The server may be temporarily unavailable
 
-### Can't see SkyFi tools
-Make sure you:
-1. Added the configuration correctly
-2. Restarted Claude Desktop
-3. Saved the config file as plain text (not .rtf or .doc)
+## Getting Help
 
-## Getting Your API Key
-
-1. Go to https://app.skyfi.com
-2. Sign up or log in
-3. Go to Settings → API Keys
-4. Create a new API key
-5. Copy the key (starts with `sk-`)
-
-**Note**: You need a Pro account for API access.
-
-## Privacy & Security
-
-- ✅ Your API key is never stored on the server
-- ✅ Each user's requests are isolated
-- ✅ All connections are encrypted with HTTPS
-- ✅ The server cannot see your search history
-
-## Need Help?
-
-- SkyFi Support: support@skyfi.com
-- API Documentation: https://docs.skyfi.com
-- Server Issues: Contact your administrator
+- View available tools: Ask "What tools are available?"
+- See examples: Ask "Show me examples of searching for satellite images"
+- Check status: Ask "Show my account information"

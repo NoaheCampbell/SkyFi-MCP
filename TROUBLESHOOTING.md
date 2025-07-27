@@ -43,13 +43,10 @@ pip install git+https://github.com/NoaheCampbell/SkyFi-MCP.git
 **Solutions**:
 1. Use simpler polygons (<25 points):
    ```python
-   # Instead of complex polygon
-   osm_polygon_to_wkt("Central Park")
-   
-   # Use predefined bbox or generate simple shape
+   # Generate simple shape instead of complex boundaries
    osm_generate_aoi(center={...}, shape="square", size_km=2)
    ```
-2. Use `skyfi_search_bbox` for simple searches
+2. Use simple coordinates for searches
 3. Enable auto-simplification (default behavior)
 
 #### 429 Rate Limited
@@ -85,14 +82,11 @@ size_km=5  # Instead of 1
 **Problem**: Polygon not what expected
 **Solution**: Verify your polygon:
 ```python
-# Check what polygon you're using
-osm_polygon_to_wkt("Your Location", simplify=False)
+# Use exact coordinates for precise control
+"POLYGON((-73.98 40.76, -73.94 40.76, -73.94 40.80, -73.98 40.80, -73.98 40.76))"
 
-# Use exact coordinates
-skyfi_search_bbox(
-    min_lon=-73.98, min_lat=40.76,
-    max_lon=-73.94, max_lat=40.80
-)
+# Or generate a simple shape
+osm_generate_aoi(center={"lat": 40.78, "lon": -73.96}, shape="square", size_km=2)
 ```
 
 ### Ordering Issues
@@ -178,16 +172,13 @@ pip show mcp-skyfi
 
 ### Tool-Specific Issues
 
-#### osm_polygon_to_wkt returns complex polygon
-**Solution**: Use the simplified version or alternatives:
+#### Complex polygon errors
+**Solution**: Use simple shapes:
 ```python
-# Option 1: Let it auto-simplify (default)
-osm_polygon_to_wkt("Central Park")
-
-# Option 2: Use area generation
+# Option 1: Generate simple shapes
 osm_generate_aoi(center={...}, shape="rectangle")
 
-# Option 3: Use landmark bbox
+# Option 2: Use predefined simple polygons
 skyfi_search_archives(aoi="POLYGON((-73.982 40.764, ...))")
 ```
 

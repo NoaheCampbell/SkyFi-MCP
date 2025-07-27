@@ -416,8 +416,16 @@ adk.register_tool(SkyFiSearchTool())
 # Use in ADK workflow
 async def satellite_research_workflow(location: str):
     # Get location boundary
-    boundary_tool = await adk.call_tool("osm_polygon_to_wkt", place_name=location)
-    wkt = boundary_tool.data["wkt"]
+    geocode = await adk.call_tool("osm_geocode", query=location, limit=1)
+    lat = geocode.data["results"][0]["lat"]
+    lon = geocode.data["results"][0]["lon"]
+    
+    # Generate area of interest
+    aoi_tool = await adk.call_tool("osm_generate_aoi", 
+                                   center={"lat": lat, "lon": lon},
+                                   shape="square",
+                                   size_km=5)
+    wkt = aoi_tool.data["wkt"]
     
     # Search for images
     images = await adk.call_tool("search_satellite_images",
@@ -501,4 +509,3 @@ python -m mcp_skyfi --help
 
 - GitHub Issues: https://github.com/NoaheCampbell/SkyFi-MCP/issues
 - API Docs: https://docs.skyfi.com
-- Discord: https://discord.gg/skyfi

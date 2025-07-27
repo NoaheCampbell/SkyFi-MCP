@@ -245,11 +245,19 @@ class MultiLocationSearcher:
             from ..utils.area_calculator import calculate_wkt_area_km2
             area_km2 = calculate_wkt_area_km2(aoi)
             
-            # Perform search
+            # Determine open_data flag based on resolution
+            resolution = search_params.get("resolution")
+            if resolution is None:
+                open_data = True  # Default to open data
+            else:
+                open_data = resolution.upper() == "LOW"
+            
+            # Perform search with explicit open_data flag
             results = await self.client.search_archives(
                 aoi=aoi,
                 from_date=from_date,
                 to_date=to_date,
+                open_data=open_data,
                 **search_params
             )
             

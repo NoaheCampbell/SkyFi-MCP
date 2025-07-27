@@ -53,25 +53,6 @@ async def register_osm_tools() -> List[Tool]:
                 "required": ["lat", "lon"]
             }
         ),
-        Tool(
-            name="osm_polygon_to_wkt",
-            description="Convert place name to WKT polygon for use with SkyFi API",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "place": {
-                        "type": "string",
-                        "description": "Place name to get boundary polygon (e.g., 'Manhattan, New York')"
-                    },
-                    "simplify": {
-                        "type": "boolean",
-                        "default": True,
-                        "description": "Simplify polygon to reduce complexity"
-                    }
-                },
-                "required": ["place"]
-            }
-        ),
     ]
     
     # Add advanced OSM tools

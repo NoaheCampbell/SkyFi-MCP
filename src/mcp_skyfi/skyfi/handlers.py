@@ -1,7 +1,7 @@
 """Handlers for SkyFi tool calls."""
 import json
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from mcp.types import TextContent
 
@@ -9,6 +9,17 @@ from .client import SkyFiClient
 from ..utils.order_manager import OrderManager
 
 logger = logging.getLogger(__name__)
+
+
+def get_open_data_flag(resolution: Optional[str]) -> bool:
+    """
+    Determine openData flag based on resolution.
+    LOW resolution = openData: true (free)
+    Any other resolution = openData: false (paid)
+    """
+    if resolution is None:
+        return True  # Default to open data if not specified
+    return resolution.upper() == "LOW"
 
 
 async def handle_skyfi_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
@@ -41,13 +52,16 @@ async def handle_skyfi_tool(name: str, arguments: Dict[str, Any]) -> List[TextCo
                     to_date_iso = to_date_str
                 
                 try:
+                    resolution = arguments.get("resolution")
+                    open_data = get_open_data_flag(resolution)
+                    
                     result = await client.search_archives(
                         aoi=arguments["aoi"],
                         from_date=from_date_iso,
                         to_date=to_date_iso,
-                        open_data=arguments.get("openData", True),
+                        open_data=open_data,
                         product_types=arguments.get("productTypes"),
-                        resolution=arguments.get("resolution"),
+                        resolution=resolution,
                     )
                 except Exception as e:
                     error_str = str(e)
@@ -667,113 +681,6 @@ async def handle_skyfi_tool(name: str, arguments: Dict[str, Any]) -> List[TextCo
                 if name in tasking_tools:
                     return await handle_tasking_tool(name, arguments)
                 
-                # Check for new search tools
-                search_tools = ["skyfi_search_exact", "skyfi_search_bbox"]
-                if name in search_tools:
-                    # Handle here since they need the client
-                    if name == "skyfi_search_exact":
-                        # Search with exact polygon - no automatic simplification
-                        from_date_str = arguments["fromDate"]
-                        to_date_str = arguments["toDate"]
-                        polygon = arguments["polygon"]
-                        simplify_if_needed = arguments.get("simplify_if_needed", False)
-                        
-                        # Parse dates
-                        try:
-                            from ..utils.date_parser import parse_date_range, format_date_for_api
-                            from_date, to_date = parse_date_range(from_date_str, to_date_str)
-                            from_date_iso = format_date_for_api(from_date)
-                            to_date_iso = format_date_for_api(to_date)
-                        except Exception as e:
-                            from_date_iso = from_date_str
-                            to_date_iso = to_date_str
-                        
-                        # Try search with exact polygon
-                        try:
-                            result = await client.search_archives(
-                                aoi=polygon,
-                                from_date=from_date_iso,
-                                to_date=to_date_iso,
-                                resolution=arguments.get("resolution", "LOW"),
-                            )
-                            
-                            # Format results
-                            if "results" in result:
-                                from ..utils.preview_generator import format_search_results_with_previews
-                                text = "✅ **Search succeeded with exact polygon**\n\n"
-                                text += format_search_results_with_previews(result['results'], max_results=5)
-                            else:
-                                text = json.dumps(result, indent=2)
-                            
-                            return [TextContent(type="text", text=text)]
-                            
-                        except Exception as e:
-                            if "422" in str(e) and simplify_if_needed:
-                                # Try to simplify
-                                from ..utils.polygon_simplifier import adaptive_simplify_wkt
-                                simplified = adaptive_simplify_wkt(polygon, max_bytes=1500)
-                                
-                                # Retry with simplified
-                                result = await client.search_archives(
-                                    aoi=simplified,
-                                    from_date=from_date_iso,
-                                    to_date=to_date_iso,
-                                    resolution=arguments.get("resolution", "LOW"),
-                                )
-                                
-                                text = "⚠️ **Polygon was simplified to meet API limits**\n\n"
-                                if "results" in result:
-                                    from ..utils.preview_generator import format_search_results_with_previews
-                                    text += format_search_results_with_previews(result['results'], max_results=5)
-                                else:
-                                    text = json.dumps(result, indent=2)
-                                
-                                return [TextContent(type="text", text=text)]
-                            else:
-                                raise
-                                
-                    elif name == "skyfi_search_bbox":
-                        # Search with simple bounding box
-                        min_lon = arguments["min_lon"]
-                        min_lat = arguments["min_lat"]
-                        max_lon = arguments["max_lon"]
-                        max_lat = arguments["max_lat"]
-                        
-                        # Create WKT polygon
-                        wkt = f"POLYGON(({min_lon} {min_lat}, {max_lon} {min_lat}, {max_lon} {max_lat}, {min_lon} {max_lat}, {min_lon} {min_lat}))"
-                        
-                        # Parse dates
-                        from_date_str = arguments["fromDate"]
-                        to_date_str = arguments["toDate"]
-                        try:
-                            from ..utils.date_parser import parse_date_range, format_date_for_api
-                            from_date, to_date = parse_date_range(from_date_str, to_date_str)
-                            from_date_iso = format_date_for_api(from_date)
-                            to_date_iso = format_date_for_api(to_date)
-                        except Exception as e:
-                            from_date_iso = from_date_str
-                            to_date_iso = to_date_str
-                        
-                        result = await client.search_archives(
-                            aoi=wkt,
-                            from_date=from_date_iso,
-                            to_date=to_date_iso,
-                            resolution=arguments.get("resolution", "LOW"),
-                        )
-                        
-                        # Format results
-                        if "results" in result:
-                            from ..utils.preview_generator import format_search_results_with_previews
-                            from ..utils.area_calculator import calculate_wkt_area_km2
-                            
-                            area = calculate_wkt_area_km2(wkt)
-                            text = f"🔍 **Bounding Box Search**\n"
-                            text += f"Area: {area:.2f} km²\n\n"
-                            text += format_search_results_with_previews(result['results'], max_results=5, area_km2=area)
-                        else:
-                            text = json.dumps(result, indent=2)
-                        
-                        return [TextContent(type="text", text=text)]
                 
                 raise ValueError(f"Unknown SkyFi tool: {name}")
     

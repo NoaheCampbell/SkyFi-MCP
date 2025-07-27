@@ -2,7 +2,7 @@
 
 A Model Context Protocol (MCP) server that provides access to SkyFi's satellite imagery API through Claude Desktop, Cursor, and other MCP-compatible clients.
 
-**29 tools** for satellite imagery search, ordering, tasking, monitoring, and geographic operations.
+A comprehensive toolkit for satellite imagery search, ordering, tasking, monitoring, and geographic operations.
 
 ## Features
 
@@ -208,28 +208,6 @@ Monitor specific areas for new satellite captures.
 #### `skyfi_get_notification_status`
 Check the status of your monitoring subscriptions.
 
-### Search Tools (New)
-
-#### `skyfi_search_exact`
-Search with exact polygon coordinates (no auto-simplification).
-
-Example:
-```
-Use exact polygon for area: POLYGON((-73.98 40.76, -73.97 40.77, ...))
-Search from last week with no simplification
-```
-
-#### `skyfi_search_bbox`
-Most reliable search using simple bounding box.
-
-Example:
-```
-Search Central Park area:
-min_lon: -73.982, min_lat: 40.764
-max_lon: -73.949, max_lat: 40.801
-From 2 weeks ago to today
-```
-
 ### OpenStreetMap Tools
 
 #### `osm_geocode`
@@ -247,15 +225,6 @@ Example:
 ```
 What address is at latitude 40.7484, longitude -73.9857?
 ```
-
-#### `osm_polygon_to_wkt`
-Convert place names to WKT polygons for satellite image searches.
-
-Example:
-```
-Get the boundary polygon for Manhattan
-```
-Note: Complex polygons are automatically simplified for common landmarks.
 
 #### `osm_generate_aoi`
 Generate area of interest polygons (circles, squares, etc.) around a point.
@@ -277,12 +246,17 @@ Calculate distance from NYC (40.7128, -74.0060) to Boston (42.3601, -71.0589)
 
 ### Finding Satellite Images of a City
 
-1. Use `osm_polygon_to_wkt` to get the boundary:
+1. Use `osm_geocode` to get coordinates:
    ```
-   Get the WKT polygon for San Francisco
+   Get coordinates for San Francisco
    ```
 
-2. Use `skyfi_search_archives` with the polygon:
+2. Use `osm_generate_aoi` to create a search area:
+   ```
+   Create a 10km square around San Francisco
+   ```
+
+3. Use `skyfi_search_archives` with the polygon:
    ```
    Search for satellite images of that area from January 2024
    ```
@@ -366,7 +340,6 @@ pip install git+https://github.com/NoaheCampbell/SkyFi-MCP.git
 ```
 
 ### Cloud Deployment
-- AWS deployment guide: [docs/AWS_DEPLOYMENT_GUIDE.md](docs/AWS_DEPLOYMENT_GUIDE.md)
 - Docker support for containerized deployments
 - WebSocket bridge for remote access
 - Built-in AWS Secrets Manager and Parameter Store integration
@@ -375,11 +348,17 @@ pip install git+https://github.com/NoaheCampbell/SkyFi-MCP.git
 
 MIT License - see LICENSE file for details.
 
+## Documentation
+
+- [Authentication Guide](docs/AUTHENTICATION.md) - API keys and authentication methods
+- [Deployment Guide](docs/DEPLOYMENT.md) - Docker, cloud, and production deployment
+- [User Guide](docs/USER_GUIDE.md) - End-user documentation
+- [Integration Guide](docs/INTEGRATIONS.md) - Framework integrations
+- [Troubleshooting Guide](TROUBLESHOOTING.md) - Common issues and solutions
+- [Migration Guide](MIGRATION_GUIDE.md) - Upgrading from previous versions
+- [Technical Specification](mcp-skyfi-specification.md) - Detailed API specification
+
 ## Support
 
-- Troubleshooting Guide: [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
-- Migration Guide: [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md)
-- Available Tools Reference: [AVAILABLE_TOOLS.md](AVAILABLE_TOOLS.md)
 - SkyFi API Documentation: [docs.skyfi.com](https://docs.skyfi.com)
-- Integration Guide: [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md)
 - Issues: [GitHub Issues](https://github.com/NoaheCampbell/SkyFi-MCP/issues)

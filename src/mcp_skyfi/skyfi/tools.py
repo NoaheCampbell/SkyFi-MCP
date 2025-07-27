@@ -9,7 +9,7 @@ async def register_skyfi_tools() -> List[Tool]:
     tools = [
         Tool(
             name="skyfi_search_archives",
-            description="Search for satellite imagery. Supports natural language dates like 'last week', 'past month', 'yesterday'. Automatically uses LOW resolution to minimize costs.",
+            description="Search for satellite imagery. Supports natural language dates. IMPORTANT: LOW resolution = free (openData), all other resolutions = paid imagery.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -27,8 +27,7 @@ async def register_skyfi_tools() -> List[Tool]:
                     },
                     "openData": {
                         "type": "boolean",
-                        "default": True,
-                        "description": "Include open data sources"
+                        "description": "DEPRECATED - Now auto-set based on resolution: LOW=true (free), others=false (paid)"
                     },
                     "productTypes": {
                         "type": "array",
@@ -41,7 +40,7 @@ async def register_skyfi_tools() -> List[Tool]:
                     "resolution": {
                         "type": "string",
                         "enum": ["LOW", "MEDIUM", "HIGH", "VERY_HIGH"],
-                        "description": "Desired resolution level"
+                        "description": "Resolution level: LOW (free/openData), MEDIUM/HIGH/VERY_HIGH (paid)"
                     }
                 },
                 "required": ["aoi", "fromDate", "toDate"]
@@ -329,9 +328,6 @@ async def register_skyfi_tools() -> List[Tool]:
     monitoring_tools = await register_monitoring_tools()
     tools.extend(monitoring_tools)
     
-    # Add new search tools
-    from .search_tools import register_search_tools
-    search_tools = register_search_tools()
-    tools.extend(search_tools)
+    # Removed extra search tools - keeping it simple with just skyfi_search_archives
     
     return tools

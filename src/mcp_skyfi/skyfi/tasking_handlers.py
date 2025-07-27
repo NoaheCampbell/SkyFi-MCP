@@ -50,8 +50,11 @@ async def get_tasking_quote(arguments: Dict[str, Any]) -> List[TextContent]:
     cloud_coverage = arguments.get("cloud_coverage", 20)
     off_nadir = arguments.get("off_nadir", 30)
     
-    # Parse dates
+    # Parse dates and convert to ISO format immediately
+    # This prevents API errors when natural language dates like "today" or "3 weeks" are used
     from_date, to_date = parse_date_range(start_date, end_date)
+    start_date_iso = format_date_for_api(from_date)
+    end_date_iso = format_date_for_api(to_date)
     
     # Calculate area
     area_km2 = calculate_wkt_area_km2(aoi)
@@ -102,12 +105,13 @@ async def get_tasking_quote(arguments: Dict[str, Any]) -> List[TextContent]:
     feasibility_score = min(95, 100 - (cloud_coverage * 0.5) - ((45 - off_nadir) * 0.3))
     
     # Store quote for later confirmation
+    # IMPORTANT: Always use ISO format dates (start_date_iso, end_date_iso) for any API calls
     quote_data = {
         "quote_id": quote_id,
         "aoi": aoi,
         "area_km2": area_km2,
-        "start_date": from_date.isoformat(),
-        "end_date": to_date.isoformat(),
+        "start_date": start_date_iso,  # Use ISO format for API compatibility
+        "end_date": end_date_iso,      # Use ISO format for API compatibility
         "resolution": resolution,
         "priority": priority,
         "prices": prices,
@@ -460,8 +464,11 @@ async def analyze_capture_feasibility(arguments: Dict[str, Any]) -> List[TextCon
     min_sun = required_conditions.get("min_sun_elevation", 30)
     avoid_snow = required_conditions.get("avoid_snow", False)
     
-    # Parse dates
+    # Parse dates and convert to ISO format immediately
+    # This prevents API errors when natural language dates like "today" or "3 weeks" are used
     from_date, to_date = parse_date_range(start_date, end_date)
+    start_date_iso = format_date_for_api(from_date)
+    end_date_iso = format_date_for_api(to_date)
     
     # Get area details
     area_km2 = calculate_wkt_area_km2(aoi)

@@ -94,6 +94,20 @@ def parse_natural_date(date_str: str, base_date: Optional[datetime] = None) -> d
         elif unit == 'month':
             return (base_date - timedelta(days=amount * 30)).replace(hour=0, minute=0, second=0, microsecond=0)
     
+    # "in X days/weeks/months" or just "X days/weeks/months" (future) patterns
+    future_pattern = r'(?:in\s*)?(\d+)\s*(day|week|month)s?(?:\s*(?:from\s*now|later))?$'
+    match = re.match(future_pattern, date_str)
+    if match:
+        amount = int(match.group(1))
+        unit = match.group(2)
+        
+        if unit == 'day':
+            return (base_date + timedelta(days=amount)).replace(hour=0, minute=0, second=0, microsecond=0)
+        elif unit == 'week':
+            return (base_date + timedelta(weeks=amount)).replace(hour=0, minute=0, second=0, microsecond=0)
+        elif unit == 'month':
+            return (base_date + timedelta(days=amount * 30)).replace(hour=0, minute=0, second=0, microsecond=0)
+    
     # Month names
     months = {
         'january': 1, 'jan': 1,

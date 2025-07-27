@@ -9,7 +9,7 @@ description = "MCP server for SkyFi satellite imagery API"
 readme = "README.md"
 license = "MIT"
 authors = [
-    { name = "SkyFi Development Team", email = "dev@skyfi.com" },
+    { name = "Noah Campbell", email = "dev@skyfi.com" },
 ]
 requires-python = ">=3.10"
 dependencies = [
