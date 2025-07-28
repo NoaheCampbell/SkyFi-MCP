@@ -1,6 +1,7 @@
 """HTTP/SSE server implementation for SkyFi MCP."""
 import logging
 import os
+import json
 from typing import Any, Dict, List, Optional
 from contextlib import asynccontextmanager
 
@@ -57,7 +58,8 @@ class SkyFiHTTPServer:
                 "transport": "sse",
                 "endpoints": {
                     "sse": "/sse",
-                    "health": "/health"
+                    "health": "/health",
+                    "tools_call": "/tools/call"
                 }
             }
         
@@ -65,6 +67,63 @@ class SkyFiHTTPServer:
         async def health():
             """Health check endpoint."""
             return {"status": "healthy"}
+        
+        @self.app.post("/tools/call")
+        async def call_tool_http(
+            request: Request,
+            authorization: Optional[str] = Header(None),
+            x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+            x_skyfi_api_key: Optional[str] = Header(None, alias="X-Skyfi-Api-Key")
+        ):
+            """Direct HTTP endpoint for tool calls."""
+            # Extract API key
+            api_key = None
+            if x_skyfi_api_key:
+                api_key = x_skyfi_api_key
+            elif x_api_key:
+                api_key = x_api_key
+            elif authorization and authorization.startswith("Bearer "):
+                api_key = authorization[7:]
+            
+            if api_key:
+                os.environ["SKYFI_API_KEY"] = api_key
+            
+            # Get request body
+            body = await request.json()
+            tool_name = body.get("name")
+            arguments = body.get("arguments", {})
+            
+            # Import tool handlers
+            from ..skyfi.tools import call_skyfi_tool
+            from ..weather.tools import call_weather_tool
+            from ..osm.tools import call_osm_tool
+            
+            # Call the appropriate tool
+            try:
+                if tool_name.startswith("skyfi_"):
+                    if not api_key:
+                        return {"error": "SkyFi API key required"}
+                    result = await call_skyfi_tool(tool_name, arguments)
+                elif tool_name.startswith("weather_"):
+                    result = await call_weather_tool(tool_name, arguments)
+                elif tool_name.startswith("osm_"):
+                    result = await call_osm_tool(tool_name, arguments)
+                else:
+                    return {"error": f"Unknown tool: {tool_name}"}
+                
+                # Convert MCP response to JSON
+                if result and isinstance(result, list) and len(result) > 0:
+                    content = result[0]
+                    if content.type == "text":
+                        try:
+                            return json.loads(content.text)
+                        except:
+                            return {"text": content.text}
+                return {"result": str(result)}
+                
+            except Exception as e:
+                logger.error(f"Error calling tool {tool_name}: {e}")
+                return {"error": str(e)}
         
         @self.app.get("/sse")
         async def handle_sse(

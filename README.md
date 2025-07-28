@@ -288,6 +288,38 @@ Calculate distance from NYC (40.7128, -74.0060) to Boston (42.3601, -71.0589)
 
 The server supports the standard MCP protocol and can be used with any MCP-compatible client.
 
+## Interactive Demos
+
+Try out the SkyFi MCP capabilities with our interactive web demos:
+
+### Web Demo (`demos/web_demo.py`)
+Interactive map-based demo for exploring satellite imagery:
+```bash
+python demos/web_demo.py
+# Open http://localhost:8888
+```
+
+Features:
+- Click anywhere on the map to analyze locations
+- Search for satellite imagery with thumbnails
+- Get weather data and cost estimates
+- Visual feedback with markers and activity feed
+
+### MCP Chat Demo (`demos/mcp_chat_demo.py`)
+Full chat interface showcasing natural language interaction:
+```bash
+python demos/mcp_chat_demo.py
+# Open http://localhost:8889
+```
+
+Features:
+- Natural language understanding for all 30+ tools
+- Quick action buttons for common tasks
+- Interactive map with polygon visualization
+- Real-time tool execution feedback
+
+See [demos/README.md](demos/README.md) for more demo applications and examples.
+
 ## Development
 
 ### Running Tests

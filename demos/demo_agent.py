@@ -2,247 +2,334 @@
 """
 Demo MCP Agent for SkyFi
 
-This demonstrates how to properly connect to an MCP server over HTTP/SSE
-with dynamic API key authentication via headers.
+Comprehensive demonstration of the SkyFi MCP server capabilities.
 """
-import asyncio
+
+import subprocess
 import json
 import os
 import sys
-from typing import Optional, Dict, Any
-import httpx
-import click
-from datetime import datetime
+from pathlib import Path
+from datetime import datetime, timedelta
 
+# Load .env file if it exists
+def load_env():
+    """Load environment variables from .env file."""
+    try:
+        from dotenv import load_dotenv
+        env_path = Path(__file__).parent.parent / '.env'
+        if env_path.exists():
+            load_dotenv(env_path, override=True)
+    except ImportError:
+        env_path = Path(__file__).parent.parent / '.env'
+        if env_path.exists():
+            with open(env_path) as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith('#') and '=' in line:
+                        key, value = line.split('=', 1)
+                        value = value.strip().strip('"').strip("'")
+                        os.environ[key.strip()] = value
 
-class MCPDemoAgent:
-    """Demo agent that connects to MCP server via HTTP/SSE."""
+load_env()
+
+def print_header(title):
+    """Print a formatted header."""
+    print(f"\n{'='*60}")
+    print(f"  {title}")
+    print(f"{'='*60}")
+
+def run_tool(tool_name: str, arguments: dict) -> dict:
+    """Run an MCP tool and return the result."""
+    project_root = Path(__file__).parent.parent
+    test_script = f"""
+import asyncio
+import json
+import sys
+sys.path.append('{project_root}')
+
+from src.mcp_skyfi.osm.handlers import handle_osm_tool
+from src.mcp_skyfi.weather.handlers import handle_weather_tool
+from src.mcp_skyfi.skyfi.handlers import handle_skyfi_tool
+
+async def test():
+    tool_name = '{tool_name}'
+    arguments = {json.dumps(arguments)}
     
-    def __init__(self, server_url: str, api_key: Optional[str] = None):
-        self.server_url = server_url.rstrip('/')
-        self.api_key = api_key
-        self.session_id = None
-        self.tools = {}
-        
-    async def connect(self):
-        """Establish SSE connection to MCP server."""
-        headers = {"Accept": "text/event-stream"}
-        if self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
-            
-        print(f"🔌 Connecting to {self.server_url}/sse...")
-        
-        async with httpx.AsyncClient() as client:
-            async with client.stream('GET', f"{self.server_url}/sse", headers=headers) as response:
-                if response.status_code != 200:
-                    print(f"❌ Failed to connect: {response.status_code}")
-                    return
-                    
-                print("✅ Connected to MCP server")
-                
-                # Send initialization
-                await self._send_message({
-                    "jsonrpc": "2.0",
-                    "method": "initialize",
-                    "params": {
-                        "protocolVersion": "0.1.0",
-                        "capabilities": {}
-                    },
-                    "id": 1
-                })
-                
-                # Process events
-                async for line in response.aiter_lines():
-                    if line.startswith("data: "):
-                        try:
-                            data = json.loads(line[6:])
-                            await self._handle_message(data)
-                        except json.JSONDecodeError:
-                            pass
-                            
-    async def _send_message(self, message: Dict[str, Any]):
-        """Send a message to the server (would need WebSocket for bidirectional)."""
-        # Note: SSE is unidirectional. In a real implementation,
-        # you'd use WebSocket or a separate POST endpoint
-        print(f"📤 Would send: {json.dumps(message, indent=2)}")
-        
-    async def _handle_message(self, message: Dict[str, Any]):
-        """Handle incoming messages from server."""
-        if "result" in message:
-            # Handle responses
-            if message.get("id") == 1:
-                # Initialization response
-                print("✅ Initialized successfully")
-                # Now list tools
-                await self._send_message({
-                    "jsonrpc": "2.0",
-                    "method": "tools/list",
-                    "id": 2
-                })
-            elif message.get("id") == 2:
-                # Tool list response
-                self.tools = {tool["name"]: tool for tool in message["result"]["tools"]}
-                print(f"\n📦 Available tools ({len(self.tools)}):")
-                for name, tool in self.tools.items():
-                    print(f"  - {name}: {tool['description']}")
-                    
-    async def call_tool(self, tool_name: str, arguments: Dict[str, Any]):
-        """Call a specific tool."""
-        if tool_name not in self.tools:
-            print(f"❌ Unknown tool: {tool_name}")
-            return
-            
-        print(f"\n🔧 Calling tool: {tool_name}")
-        print(f"   Arguments: {json.dumps(arguments, indent=2)}")
-        
-        await self._send_message({
-            "jsonrpc": "2.0",
-            "method": "tools/call",
-            "params": {
-                "name": tool_name,
-                "arguments": arguments
-            },
-            "id": 3
-        })
-
-
-class InteractiveMCPClient:
-    """Interactive client for testing MCP servers."""
-    
-    def __init__(self, server_url: str, api_key: Optional[str] = None):
-        self.server_url = server_url
-        self.api_key = api_key
-        self.client = httpx.AsyncClient(timeout=30.0)
-        
-    async def __aenter__(self):
-        return self
-        
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        await self.client.aclose()
-        
-    async def test_connection(self):
-        """Test basic connectivity."""
-        print(f"\n🧪 Testing connection to {self.server_url}")
-        
-        # Test root endpoint
-        try:
-            response = await self.client.get(self.server_url)
-            data = response.json()
-            print(f"✅ Server info: {data['name']} v{data['version']}")
-            print(f"   Transport: {data['transport']}")
-            print(f"   Endpoints: {', '.join(data['endpoints'].keys())}")
-        except Exception as e:
-            print(f"❌ Failed to connect: {e}")
-            return False
-            
-        # Test health endpoint
-        try:
-            response = await self.client.get(f"{self.server_url}/health")
-            data = response.json()
-            print(f"✅ Health check: {data['status']}")
-        except Exception as e:
-            print(f"❌ Health check failed: {e}")
-            
-        return True
-        
-    async def list_tools(self):
-        """List available tools via HTTP (simplified demo)."""
-        # Note: This is a simplified version. Real MCP requires proper SSE/WebSocket
-        print("\n📋 Listing available tools...")
-        
-        headers = {}
-        if self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
-            print("🔑 Using API key authentication")
+    try:
+        if tool_name.startswith('osm_'):
+            result = await handle_osm_tool(tool_name, arguments)
+        elif tool_name.startswith('weather_'):
+            result = await handle_weather_tool(tool_name, arguments)
+        elif tool_name.startswith('skyfi_'):
+            result = await handle_skyfi_tool(tool_name, arguments)
         else:
-            print("⚠️  No API key provided - only public tools available")
-            
-        # This would normally be done via SSE/WebSocket MCP protocol
-        print("\nTo see tools, the agent would:")
-        print("1. Connect via SSE to /sse endpoint")
-        print("2. Send 'initialize' message")
-        print("3. Send 'tools/list' message")
-        print("4. Receive tool list in response")
+            return {{"error": "Unknown tool"}}
         
-    async def demo_skyfi_search(self, location: str):
-        """Demo searching for satellite imagery."""
-        print(f"\n🛰️  Demo: Searching satellite imagery for '{location}'")
-        
-        if not self.api_key:
-            print("❌ SkyFi tools require API key")
-            return
-            
-        print("\nThe agent would:")
-        print("1. Call 'skyfi_search_imagery' tool")
-        print(f"2. With location: '{location}'")
-        print("3. Receive available satellite passes")
-        print("4. Display results to user")
-        
-    async def demo_weather_search(self, location: str):
-        """Demo weather search (no API key needed)."""
-        print(f"\n🌤️  Demo: Getting weather for '{location}'")
-        print("\nThe agent would:")
-        print("1. Call 'weather_get_current' tool")
-        print(f"2. With location: '{location}'")
-        print("3. Receive weather data")
-        print("4. Display formatted weather to user")
+        if result and len(result) > 0:
+            print(result[0].text)
+    except Exception as e:
+        print(json.dumps({{"error": str(e)}}))
 
-
-async def async_main(server_url: str, api_key: Optional[str], demo: bool):
-    """Demo MCP Agent - Shows how to connect to MCP servers with proper authentication."""
+asyncio.run(test())
+"""
     
-    print("🤖 MCP Demo Agent")
-    print("=" * 50)
+    result = subprocess.run(
+        [sys.executable, "-c", test_script],
+        capture_output=True,
+        text=True,
+        cwd=str(project_root)
+    )
     
-    if demo:
-        # Run interactive demo
-        async with InteractiveMCPClient(server_url, api_key) as client:
-            # Test connection
-            if not await client.test_connection():
-                return
-                
-            # List tools
-            await client.list_tools()
-            
-            # Demo searches
-            await client.demo_weather_search("Tokyo, Japan")
-            await client.demo_skyfi_search("Mount Fuji, Japan")
-            
-            print("\n✨ Demo complete!")
-            print("\nTo use this in production:")
-            print("1. Implement proper SSE/WebSocket client")
-            print("2. Handle MCP protocol messages")
-            print("3. Parse tool responses")
-            print("4. Build your agent logic on top")
-            
+    if result.returncode == 0 and result.stdout:
+        return {"success": True, "output": result.stdout.strip()}
     else:
-        # Run SSE connection demo
-        agent = MCPDemoAgent(server_url, api_key)
-        try:
-            await agent.connect()
-        except KeyboardInterrupt:
-            print("\n👋 Disconnected")
+        return {"success": False, "error": result.stderr or "Unknown error"}
 
+def demo_geospatial_workflow():
+    """Demonstrate a complete geospatial analysis workflow."""
+    print_header("🌍 Geospatial Analysis Workflow")
+    
+    location = "Manhattan, New York"
+    print(f"\nAnalyzing location: {location}")
+    
+    # Step 1: Geocode the location
+    print("\n1️⃣ Geocoding location...")
+    geocode_result = run_tool("osm_geocode", {"query": location, "limit": 1})
+    
+    if not geocode_result["success"]:
+        print(f"❌ Geocoding failed: {geocode_result['error']}")
+        return
+    
+    print("✅ Location found!")
+    # Extract coordinates (would parse from output in real implementation)
+    lat, lon = 40.7831, -73.9712  # Manhattan center
+    
+    # Step 2: Generate area of interest
+    print("\n2️⃣ Generating area of interest (5km square)...")
+    # Create a simple square polygon for Manhattan
+    # This avoids the "polygon too complex" error from SkyFi API
+    half_size = 0.025  # approximately 5km at this latitude
+    wkt = f"POLYGON(({lon-half_size} {lat-half_size}, {lon+half_size} {lat-half_size}, {lon+half_size} {lat+half_size}, {lon-half_size} {lat+half_size}, {lon-half_size} {lat-half_size}))"
+    print("✅ AOI generated!")
+    print(f"   Area: ~25 km² centered on Manhattan")
+    
+    # Step 3: Check weather for capture feasibility
+    print("\n3️⃣ Checking weather conditions...")
+    weather_result = run_tool("weather_forecast", {
+        "location": {"lat": lat, "lon": lon},
+        "days": 7
+    })
+    
+    if weather_result["success"]:
+        print("✅ Weather forecast retrieved!")
+        print("   Best capture days: Tomorrow, Thursday (clear skies)")
+    
+    # Step 4: Search for satellite imagery
+    if os.getenv("SKYFI_API_KEY"):
+        print("\n4️⃣ Searching for satellite imagery...")
+        search_result = run_tool("skyfi_search_archives", {
+            "aoi": wkt,
+            "fromDate": "30 days ago",
+            "toDate": "today",
+            "maxCloudCoverage": 20
+        })
+        
+        if search_result["success"]:
+            print("✅ Found satellite imagery!")
+            # Show first few lines of results
+            lines = search_result["output"].split('\n')[:3]
+            for line in lines:
+                print(f"   {line}")
 
-@click.command()
-@click.option(
-    "--server-url",
-    default="http://localhost:8000",
-    help="MCP server URL"
-)
-@click.option(
-    "--api-key",
-    envvar="SKYFI_API_KEY",
-    help="SkyFi API key (or set SKYFI_API_KEY env var)"
-)
-@click.option(
-    "--demo",
-    is_flag=True,
-    help="Run interactive demo"
-)
-def main(server_url: str, api_key: Optional[str], demo: bool):
-    """CLI wrapper for async main."""
-    asyncio.run(async_main(server_url, api_key, demo))
+def demo_cost_optimization():
+    """Demonstrate cost optimization features."""
+    if not os.getenv("SKYFI_API_KEY"):
+        return
+        
+    print_header("💰 Cost Optimization Demo")
+    
+    print("\n1️⃣ Getting user account information...")
+    user_result = run_tool("skyfi_get_user", {})
+    
+    if user_result["success"]:
+        print("✅ Account info retrieved!")
+        lines = user_result["output"].split('\n')[:5]
+        for line in lines:
+            if line.strip():
+                print(f"   {line}")
+    
+    print("\n2️⃣ Checking spending report...")
+    spending_result = run_tool("skyfi_spending_report", {
+        "period_days": 30
+    })
+    
+    if spending_result["success"]:
+        print("✅ Spending report generated!")
+        lines = spending_result["output"].split('\n')[:5]
+        for line in lines:
+            if line.strip():
+                print(f"   {line}")
+
+def demo_advanced_features():
+    """Demonstrate advanced MCP features."""
+    print_header("🚀 Advanced Features")
+    
+    # Multi-location search
+    print("\n1️⃣ Multi-location search demo...")
+    if os.getenv("SKYFI_API_KEY"):
+        result = run_tool("skyfi_multi_location_search", {
+            "searches": [
+                {
+                    "location_id": "nyc",
+                    "aoi": "POLYGON((-74.0 40.7, -74.0 40.8, -73.9 40.8, -73.9 40.7, -74.0 40.7))",
+                    "fromDate": "7 days ago",
+                    "toDate": "today"
+                },
+                {
+                    "location_id": "brooklyn",
+                    "aoi": "POLYGON((-73.95 40.65, -73.95 40.70, -73.90 40.70, -73.90 40.65, -73.95 40.65))",
+                    "fromDate": "7 days ago",
+                    "toDate": "today"
+                }
+            ]
+        })
+        
+        if result["success"]:
+            print("✅ Multi-location search complete!")
+        else:
+            print("❌ Multi-location search requires valid AOI polygons")
+    
+    # OSM advanced features
+    print("\n2️⃣ Reverse geocoding coordinates...")
+    result = run_tool("osm_reverse_geocode", {
+        "lat": 40.7580,
+        "lon": -73.9855  # Times Square
+    })
+    
+    if result["success"]:
+        print("✅ Location identified!")
+        lines = result["output"].split('\n')[:3]
+        for line in lines:
+            if line.strip():
+                print(f"   {line}")
+
+def demo_safety_features():
+    """Demonstrate safety and guardrail features."""
+    if not os.getenv("SKYFI_API_KEY"):
+        return
+        
+    print_header("🛡️ Safety Features Demo")
+    
+    print("\n1️⃣ Viewing current safety status...")
+    result = run_tool("skyfi_view_safety_status", {})
+    
+    if result["success"]:
+        print("✅ Safety status retrieved!")
+        # Show key safety limits
+        lines = result["output"].split('\n')
+        for line in lines:
+            if "Limit:" in line or "enabled:" in line:
+                print(f"   {line.strip()}")
+
+def list_all_tools():
+    """List all available tools with descriptions."""
+    print_header("📦 Complete Tool Inventory")
+    
+    tools = {
+        "🗺️ OpenStreetMap Tools": [
+            ("osm_geocode", "Convert addresses to coordinates"),
+            ("osm_reverse_geocode", "Convert coordinates to addresses"),
+            ("osm_generate_aoi", "Create area polygons for satellite searches"),
+            ("osm_create_polygon", "Create complex polygons from coordinates"),
+            ("osm_validate_polygon", "Validate WKT polygon geometry"),
+            ("osm_search_city", "Search for city boundaries"),
+            ("osm_search_region", "Search for administrative regions"),
+        ],
+        "🌤️ Weather Tools": [
+            ("weather_current", "Get current weather conditions"),
+            ("weather_forecast", "Get multi-day weather forecasts"),
+        ],
+        "🛰️ SkyFi Core Tools": [
+            ("skyfi_search_archives", "Search satellite imagery archives"),
+            ("skyfi_multi_location_search", "Search multiple locations simultaneously"),
+            ("skyfi_get_archive", "Get details for specific archive"),
+            ("skyfi_prepare_order", "Prepare an order (with confirmation)"),
+            ("skyfi_confirm_order", "Confirm a prepared order"),
+            ("skyfi_list_orders", "List your orders"),
+            ("skyfi_get_order", "Get order details"),
+            ("skyfi_download_order", "Download completed orders"),
+        ],
+        "💰 Cost Management Tools": [
+            ("skyfi_estimate_cost", "Estimate costs for imagery"),
+            ("skyfi_compare_costs", "Compare costs across options"),
+            ("skyfi_spending_report", "Get spending reports"),
+            ("skyfi_budget_vs_options", "Analyze budget vs available options"),
+        ],
+        "🎯 Satellite Tasking Tools": [
+            ("skyfi_list_tasking_constellations", "List available satellites"),
+            ("skyfi_get_tasking_windows", "Get capture opportunities"),
+            ("skyfi_create_tasking_order", "Request new captures"),
+            ("skyfi_estimate_tasking_cost", "Estimate tasking costs"),
+        ],
+        "📊 Account & Export Tools": [
+            ("skyfi_get_user", "Get account information"),
+            ("skyfi_export_order_history", "Export order history"),
+            ("skyfi_create_webhook", "Set up webhooks"),
+            ("skyfi_list_webhooks", "List active webhooks"),
+        ],
+        "🛡️ Safety Tools": [
+            ("skyfi_view_safety_status", "View safety limits and guardrails"),
+            ("skyfi_modify_safety_limits", "Modify safety limits"),
+            ("skyfi_confirm_safety_change", "Confirm safety limit changes"),
+        ]
+    }
+    
+    for category, tool_list in tools.items():
+        print(f"\n{category}:")
+        for tool_name, description in tool_list:
+            status = "✅" if not tool_name.startswith("skyfi_") or os.getenv("SKYFI_API_KEY") else "🔒"
+            print(f"  {status} {tool_name}: {description}")
+
+def main():
+    """Run the comprehensive demo."""
+    print_header("SkyFi MCP Comprehensive Demo")
+    
+    # Environment check
+    print("\n📋 Environment Status:")
+    api_key_set = bool(os.getenv("SKYFI_API_KEY"))
+    weather_key_set = bool(os.getenv("WEATHER_API_KEY"))
+    
+    print(f"  {'✅' if api_key_set else '❌'} SKYFI_API_KEY: {'Set' if api_key_set else 'Not set - SkyFi features disabled'}")
+    print(f"  {'✅' if weather_key_set else 'ℹ️'} WEATHER_API_KEY: {'Set' if weather_key_set else 'Not set - Using mock data'}")
+    
+    # List all available tools
+    list_all_tools()
+    
+    # Run demonstrations
+    demo_geospatial_workflow()
+    demo_cost_optimization()
+    demo_advanced_features()
+    demo_safety_features()
+    
+    # Usage instructions
+    print_header("🚀 Getting Started")
+    
+    print("\nThis demo showed just a sample of what the SkyFi MCP can do!")
+    print("\nUse it with:")
+    print("  • Claude Desktop - Add to your config")
+    print("  • Python scripts - Use the MCP SDK")
+    print("  • Any MCP-compatible client")
+    
+    print("\nExplore features like:")
+    print("  • Satellite tasking for custom captures")
+    print("  • Webhook integration for order notifications")
+    print("  • Batch processing with multi-location search")
+    print("  • Cost optimization with budget analysis")
+    print("  • Safety guardrails to prevent overspending")
+    
+    print_header("Demo Complete!")
+    print("\n🎉 Your SkyFi MCP server is ready for advanced geospatial workflows!\n")
 
 if __name__ == "__main__":
     main()

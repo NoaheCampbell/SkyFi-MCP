@@ -37,7 +37,7 @@ async def handle_websocket(websocket, path):
             env[key] = os.environ[key]
     
     proc = await asyncio.create_subprocess_exec(
-        'python', '-m', 'mcp_skyfi',
+        'python3', '-m', 'mcp_skyfi',
         stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,

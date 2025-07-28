@@ -112,7 +112,7 @@ async def handle_skyfi_tool(name: str, arguments: Dict[str, Any]) -> List[TextCo
                         raise
                 
                 # Format results with previews
-                if "results" in result:
+                if "results" in result or "archives" in result:
                     from ..utils.preview_generator import format_search_results_with_previews
                     from ..utils.budget_alerts import format_spending_summary
                     from ..utils.price_interpreter import needs_price_clarification
@@ -129,12 +129,15 @@ async def handle_skyfi_tool(name: str, arguments: Dict[str, Any]) -> List[TextCo
                     # Show spending summary at the top
                     text = format_spending_summary(client.cost_tracker, client.config) + "\n\n"
                     
+                    # Get the results/archives list
+                    results_list = result.get('results', result.get('archives', []))
+                    
                     # Check if we need price clarification
-                    if needs_price_clarification(result['results']):
+                    if needs_price_clarification(results_list):
                         text += "⚠️  Note: Prices shown are per km². Total cost = price × area (min 25 km²)\n\n"
                     
                     # Format results with area context
-                    text += format_search_results_with_previews(result['results'], max_results=5, area_km2=search_area_km2)
+                    text += format_search_results_with_previews(results_list, max_results=5, area_km2=search_area_km2)
                 else:
                     text = json.dumps(result, indent=2)
                 
